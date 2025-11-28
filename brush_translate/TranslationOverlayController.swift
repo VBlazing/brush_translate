@@ -8,11 +8,12 @@
 import AppKit
 import SwiftUI
 
-final class TranslationOverlayController {
+final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
     private var isHovering = false
     private var trackingArea: NSTrackingArea?
+    private var eventMonitor: Any?
 
     func show(translation: TranslationResult, theme: ThemeOption) {
         show(view: AnyView(TranslationCardView(translation: translation, theme: theme) { [weak self] hovering in
@@ -69,6 +70,7 @@ final class TranslationOverlayController {
     }
 
     func hide() {
+        clearMonitor()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
             self.panel?.animator().alphaValue = 0
@@ -97,6 +99,7 @@ final class TranslationOverlayController {
         panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
         panel.ignoresMouseEvents = false
+        panel.delegate = self
 
         self.panel = panel
     }
@@ -118,7 +121,7 @@ final class TranslationOverlayController {
         panel.contentView?.addGestureRecognizer(doubleClick)
 
         // Track clicks outside the panel
-        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
             guard let self, let panel = self.panel else { return event }
             // Convert click to panel content coordinates to decide outside/inside
             let screenPoint: NSPoint
@@ -147,6 +150,17 @@ final class TranslationOverlayController {
     }
 
     @objc private func handleDoubleClick(_ sender: NSGestureRecognizer) {
+        hide()
+    }
+
+    private func clearMonitor() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
         hide()
     }
 }
