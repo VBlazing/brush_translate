@@ -31,7 +31,7 @@ final class TranslationService {
     }
 
     private func fallbackTranslation(for text: String, from source: LanguageOption, to target: LanguageOption) -> TranslationResult {
-        let guessedLanguage = detectLanguage(for: text) ?? source.displayName
+        let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
         let placeholder = "[占位翻译]\n\(text)"
         let definitions = definitionsForWord(text)
 
@@ -49,6 +49,14 @@ final class TranslationService {
         recognizer.processString(text)
         guard let language = recognizer.dominantLanguage else { return nil }
         return language.rawValue
+    }
+
+    private func detectedDisplayName(for text: String, fallback: String) -> String {
+        guard let code = detectLanguage(for: text) else { return fallback }
+        if let option = LanguageOption.allCases.first(where: { $0.code == code }) {
+            return option.displayName
+        }
+        return "未知语言"
     }
 
     private func definitionsForWord(_ word: String) -> [String] {
