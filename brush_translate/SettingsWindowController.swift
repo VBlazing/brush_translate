@@ -8,14 +8,18 @@
 import AppKit
 import SwiftUI
 
-final class SettingsWindowController {
+final class SettingsWindowController: NSObject, NSWindowDelegate {
     static let shared = SettingsWindowController()
 
     private var window: NSWindow?
+    private weak var model: AppModel?
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
 
     func show(with model: AppModel) {
+        self.model = model
         if window == nil {
             let content = ContentView().environmentObject(model)
             let window = NSWindow(
@@ -28,10 +32,15 @@ final class SettingsWindowController {
             window.isReleasedWhenClosed = false
             window.contentView = NSHostingView(rootView: content)
             window.center()
+            window.delegate = self
             self.window = window
         }
 
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        model?.enterAccessoryMode()
     }
 }

@@ -11,6 +11,10 @@ import AppKit
 @main
 struct brush_translateApp: App {
     @StateObject private var model = AppModel()
+    
+    init() {
+        NSApplication.shared.setActivationPolicy(.accessory)
+    }
 
     var body: some Scene {
         MenuBarExtra("Brush Translate", systemImage: "character.book.closed") {

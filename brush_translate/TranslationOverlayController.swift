@@ -12,6 +12,7 @@ final class TranslationOverlayController {
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
     private var isHovering = false
+    private var trackingArea: NSTrackingArea?
 
     func show(translation: TranslationResult, theme: ThemeOption) {
         show(view: AnyView(TranslationCardView(translation: translation, theme: theme) { [weak self] hovering in
@@ -47,6 +48,7 @@ final class TranslationOverlayController {
             self.panel?.orderFrontRegardless()
             self.panel?.alphaValue = 0
             self.isHovering = false
+            self.addClickAwayRecognizer()
 
             NSApp.activate(ignoringOtherApps: true)
             NSAnimationContext.runAnimationGroup { context in
@@ -54,7 +56,6 @@ final class TranslationOverlayController {
                 self.panel?.animator().alphaValue = 1
             }
 
-            self.scheduleHide(after: 5)
         }
     }
 
@@ -63,19 +64,7 @@ final class TranslationOverlayController {
         if isHovering {
             dismissTask?.cancel()
         } else {
-            scheduleHide(after: 5)
-        }
-    }
-
-    private func scheduleHide(after seconds: TimeInterval) {
-        dismissTask?.cancel()
-        dismissTask = Task { [weak self] in
-            let nanoseconds = UInt64(seconds * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: nanoseconds)
-            await MainActor.run {
-                guard self?.isHovering == false else { return }
-                self?.hide()
-            }
+            // no auto-hide; will hide on click-away/double-click
         }
     }
 
@@ -107,7 +96,57 @@ final class TranslationOverlayController {
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
+        panel.ignoresMouseEvents = false
 
         self.panel = panel
+    }
+
+    private func addClickAwayRecognizer() {
+        guard let panel else { return }
+        panel.acceptsMouseMovedEvents = true
+        panel.level = .screenSaver
+
+        let clickRecognizer = NSClickGestureRecognizer(target: self, action: #selector(handleClickOutside(_:)))
+        clickRecognizer.buttonMask = 0x1 // left click
+        clickRecognizer.numberOfClicksRequired = 1
+        clickRecognizer.delaysPrimaryMouseButtonEvents = false
+        panel.contentView?.addGestureRecognizer(clickRecognizer)
+
+        let doubleClick = NSClickGestureRecognizer(target: self, action: #selector(handleDoubleClick(_:)))
+        doubleClick.numberOfClicksRequired = 2
+        doubleClick.buttonMask = 0x1
+        panel.contentView?.addGestureRecognizer(doubleClick)
+
+        // Track clicks outside the panel
+        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+            guard let self, let panel = self.panel else { return event }
+            // Convert click to panel content coordinates to decide outside/inside
+            let screenPoint: NSPoint
+            if let win = event.window {
+                screenPoint = win.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
+            } else {
+                screenPoint = event.locationInWindow
+            }
+            let panelPoint = panel.convertPoint(fromScreen: screenPoint)
+            if let contentView = panel.contentView {
+                let localPoint = contentView.convert(panelPoint, from: nil)
+                if !contentView.bounds.contains(localPoint) {
+                    self.hide()
+                    return nil
+                }
+            } else {
+                self.hide()
+                return nil
+            }
+            return event
+        }
+    }
+
+    @objc private func handleClickOutside(_ sender: NSGestureRecognizer) {
+        // gesture handled in local monitor
+    }
+
+    @objc private func handleDoubleClick(_ sender: NSGestureRecognizer) {
+        hide()
     }
 }
