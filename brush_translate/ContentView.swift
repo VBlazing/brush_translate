@@ -96,23 +96,25 @@ struct TranslationCardView: View {
     private let labelColor = Color(red: 113/255, green: 113/255, blue: 122/255)
 
     var body: some View {
+        @State var isVisibleTranslate: Bool = !translation.originalText.isEmpty
         ZStack {
             VStack(spacing: 0) {
-                Text(translation.originalText.isEmpty ? "无内容" : translation.originalText)
+                Text(translation.originalText.isEmpty ? "未获取到选中文本" : translation.originalText)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(theme.sourceText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .multilineTextAlignment(.leading)
                     .lineSpacing(6)
             
-                Spacer(minLength: 4)
-                Text(translation.translatedText.isEmpty ? "无翻译" : translation.translatedText)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(theme.translateText)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing(6)
-
+                Spacer()
+                if (isVisibleTranslate) {
+                    Text(translation.translatedText.isEmpty ? "无翻译" : translation.translatedText)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(theme.translateText)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.leading)
+                        .lineSpacing(6)
+                }
             }
 //            The function cannot complete because messaging failed in some way or because the application with
             .padding(.vertical, 40)
@@ -122,9 +124,9 @@ struct TranslationCardView: View {
                     .fill(theme.cardBackground)
                     .shadow(color: theme.shadow, radius: 28, y: 12)
             )
+            .frame(width: 520)
             .edgesIgnoringSafeArea(.all)
         }
-        .frame(width: 520)
         .onHover { hovering in
             onHoverChange(hovering)
         }

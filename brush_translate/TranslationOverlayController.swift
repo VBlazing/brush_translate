@@ -21,10 +21,10 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         }), theme: theme)
     }
 
-    func showPlaceholder(message: String, theme: ThemeOption) {
+    func showPlaceholder(theme: ThemeOption) {
         let placeholder = TranslationResult(
             originalText: "",
-            translatedText: message,
+            translatedText: "",
             alternatives: [],
             detectedSource: "",
             target: ""
