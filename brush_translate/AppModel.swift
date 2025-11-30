@@ -171,21 +171,21 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         }
     }
 
-    var primaryText: Color {
+    var sourceText: Color {
         switch self {
         case .night:
-            return Color.white.opacity(0.95)
+            return Color(red: 245/255, green: 245/255, blue: 245/255)
         case .light:
-            return Color.white.opacity(0.95)
+            return Color(red: 30/255, green: 30/255, blue: 30/255)
         }
     }
 
-    var accentText: Color {
+    var translateText: Color {
         switch self {
         case .night:
-            return Color.white
+            return Color(red: 160/255, green: 160/255, blue: 160/255)
         case .light:
-            return Color.white
+            return Color(red: 117/255, green: 117/255, blue: 117/255)
         }
     }
 

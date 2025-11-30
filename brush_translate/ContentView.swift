@@ -98,19 +98,25 @@ struct TranslationCardView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                sectionView(
-                    language: translation.detectedSource.isEmpty ? "自动" : translation.detectedSource,
-                    text: translation.originalText.isEmpty ? "无内容" : translation.originalText
-                )
-                Rectangle()
-                    .fill(theme.divider)
-                    .frame(height: 1)
+                Text(translation.originalText.isEmpty ? "无内容" : translation.originalText)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(theme.sourceText)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing(6)
+            
+                Spacer(minLength: 4)
+                Text(translation.translatedText.isEmpty ? "无翻译" : translation.translatedText)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(theme.translateText)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing(6)
 
-                sectionView(
-                    language: translation.target.isEmpty ? "目标" : translation.target,
-                    text: translation.translatedText.isEmpty ? "无翻译" : translation.translatedText
-                )
             }
+//            The function cannot complete because messaging failed in some way or because the application with
+            .padding(.vertical, 40)
+            .padding(.horizontal, 60)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(theme.cardBackground)
@@ -122,25 +128,6 @@ struct TranslationCardView: View {
         .onHover { hovering in
             onHoverChange(hovering)
         }
-    }
-
-    @ViewBuilder
-    private func sectionView(language: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(language)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(labelColor)
-
-            Text(text)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(theme.primaryText)
-                .padding(.top, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .multilineTextAlignment(.leading)
-
-            Spacer(minLength: 12)
-        }
-        .padding(20)
     }
 }
 
