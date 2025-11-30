@@ -18,9 +18,6 @@ struct brush_translateApp: App {
 
     var body: some Scene {
         MenuBarExtra("Brush Translate", systemImage: "character.book.closed") {
-//            Button("翻译选中文本 (⌥T)") {
-//                model.triggerTranslationFromSelection()
-//            }
             Button("打开设置") {
                 model.openSettings()
             }

@@ -44,7 +44,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
                 let size = hosting.fittingSize
                 self.panel?.setContentSize(size)
             }
-            self.panel?.center()
+            self.repositionPanelToMouseCenter()
             self.panel?.makeKeyAndOrderFront(nil)
             self.panel?.orderFrontRegardless()
             self.panel?.alphaValue = 0
@@ -53,7 +53,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
 
             NSApp.activate(ignoringOtherApps: true)
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
+                context.duration = 0.1
                 self.panel?.animator().alphaValue = 1
             }
 
@@ -63,7 +63,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private func handleHover(isHovering: Bool) {
         self.isHovering = isHovering
         if isHovering {
-            dismissTask?.cancel()
+//            dismissTask?.cancel()
         } else {
             // no auto-hide; will hide on click-away/double-click
         }
@@ -162,5 +162,23 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         hide()
+    }
+
+    private func repositionPanelToMouseCenter() {
+        guard let panel = panel else { return }
+        let mouseLocation = NSEvent.mouseLocation
+        var frame = panel.frame
+
+        frame.origin = NSPoint(x: mouseLocation.x - frame.width / 2,
+                               y: mouseLocation.y - frame.height / 2)
+
+        if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) {
+            let maxX = screen.visibleFrame.maxX - frame.width
+            let maxY = screen.visibleFrame.maxY - frame.height
+            frame.origin.x = max(screen.visibleFrame.minX, min(frame.origin.x, maxX))
+            frame.origin.y = max(screen.visibleFrame.minY, min(frame.origin.y, maxY))
+        }
+
+        panel.setFrame(frame, display: true, animate: false)
     }
 }

@@ -36,7 +36,7 @@ final class HotKeyManager {
             &eventHandler
         )
 
-        var hotKeyID = EventHotKeyID(signature: OSType(UInt32(bigEndian: 0x42525348)), id: 1) // "BRSH"
+        let hotKeyID = EventHotKeyID(signature: OSType(UInt32(bigEndian: 0x42525348)), id: 1) // "BRSH"
         let keyCode: UInt32 = 17 // T key
         let modifiers: UInt32 = UInt32(optionKey)
 
