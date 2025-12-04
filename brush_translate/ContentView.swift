@@ -64,6 +64,16 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Deepseek API Key")
+                    .font(.subheadline)
+                SecureField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
+                    .textFieldStyle(.roundedBorder)
+                Text("必须配置后才能调用大模型翻译，密钥仅保存在本机。")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+
             HStack(spacing: 12) {
                 Button(action: model.triggerTranslationFromSelection) {
                     Label("翻译当前选区", systemImage: "play.fill")
@@ -90,31 +100,22 @@ struct ContentView: View {
 }
 
 struct TranslationCardView: View {
-    let translation: TranslationResult
+    let data: TranslationCardData
     let theme: ThemeOption
     let onHoverChange: (Bool) -> Void
-    private let labelColor = Color(red: 113/255, green: 113/255, blue: 122/255)
 
     var body: some View {
-        @State var isVisibleTranslate: Bool = !translation.originalText.isEmpty
         ZStack {
             VStack(spacing: 0) {
-                Text(translation.originalText.isEmpty ? "未获取到选中文本" : translation.originalText)
+                Text(data.sourceText.isEmpty ? "未获取到选中文本" : data.sourceText)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(theme.sourceText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .multilineTextAlignment(.leading)
                     .lineSpacing(6)
-            
+
                 Spacer()
-                if (isVisibleTranslate) {
-                    Text(translation.translatedText.isEmpty ? "无翻译" : translation.translatedText)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(theme.translateText)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .multilineTextAlignment(.leading)
-                        .lineSpacing(6)
-                }
+                translationSection
             }
 //            The function cannot complete because messaging failed in some way or because the application with
             .padding(.vertical, 40)
@@ -131,9 +132,65 @@ struct TranslationCardView: View {
             onHoverChange(hovering)
         }
     }
+
+    @ViewBuilder
+    private var translationSection: some View {
+        switch data.status {
+        case .placeholder:
+            Text("无翻译")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(theme.translateText)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(6)
+        case .loading:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                Text("翻译中...")
+            }
+            .font(.system(size: 18, weight: .medium))
+            .foregroundColor(theme.translateText)
+            .frame(maxWidth: .infinity, alignment: .center)
+        case .success:
+            Text(data.translatedText.isEmpty ? "无翻译" : data.translatedText)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(theme.translateText)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(6)
+        case .failure:
+            VStack(spacing: 12) {
+                Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.translateText)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.leading)
+                if let onRetry = data.onRetry {
+                    Button("重试", action: onRetry)
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
 }
 
 #Preview {
     ContentView()
         .environmentObject(AppModel())
+}
+
+struct TranslationCardData {
+    enum Status {
+        case placeholder
+        case loading
+        case success
+        case failure
+    }
+
+    let sourceText: String
+    let translatedText: String
+    let status: Status
+    let onRetry: (() -> Void)?
 }

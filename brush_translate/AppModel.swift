@@ -14,6 +14,7 @@ final class AppModel: ObservableObject {
     @Published var targetLanguage: LanguageOption
     @Published var statusMessage: String = "等待选中文本..."
     @Published var theme: ThemeOption
+    @Published var deepseekAPIKey: String
 
     private let translator = TranslationService()
     private let overlay = TranslationOverlayController()
@@ -23,10 +24,12 @@ final class AppModel: ObservableObject {
         let storedSource = UserDefaults.standard.string(forKey: UserDefaultsKeys.sourceLanguage) ?? LanguageOption.auto.code
         let storedTarget = UserDefaults.standard.string(forKey: UserDefaultsKeys.targetLanguage) ?? LanguageOption.simplifiedChinese.code
         let storedTheme = UserDefaults.standard.string(forKey: UserDefaultsKeys.theme) ?? ThemeOption.night.rawValue
+        let storedAPIKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.deepseekAPIKey) ?? ""
 
         sourceLanguage = LanguageOption(rawValue: storedSource) ?? .auto
         targetLanguage = LanguageOption(rawValue: storedTarget) ?? .simplifiedChinese
         theme = ThemeOption(rawValue: storedTheme) ?? .night
+        deepseekAPIKey = storedAPIKey
 
         $sourceLanguage
             .sink { value in
@@ -43,6 +46,12 @@ final class AppModel: ObservableObject {
         $theme
             .sink { value in
                 UserDefaults.standard.setValue(value.rawValue, forKey: UserDefaultsKeys.theme)
+            }
+            .store(in: &cancellables)
+
+        $deepseekAPIKey
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.deepseekAPIKey)
             }
             .store(in: &cancellables)
 
@@ -78,25 +87,51 @@ final class AppModel: ObservableObject {
                 return
             }
 
+            await translateAndShow(for: selectedText)
+        }
+    }
+
+    private func translateAndShow(for selectedText: String) async {
+        let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
             await MainActor.run {
-                self.statusMessage = "正在翻译..."
+                self.statusMessage = "未获取到选中文本"
+                self.overlay.showPlaceholder(theme: self.theme)
             }
+            return
+        }
 
-            do {
-                let result = try await translator.translate(
-                    text: selectedText,
-                    from: sourceLanguage,
-                    to: targetLanguage
+        await MainActor.run {
+            self.statusMessage = "正在翻译..."
+            self.overlay.showLoading(sourceText: trimmed, theme: self.theme)
+        }
+
+        do {
+            let result = try await translator.translate(
+                text: trimmed,
+                from: sourceLanguage,
+                to: targetLanguage,
+                apiKey: deepseekAPIKey
+            )
+
+            await MainActor.run {
+                self.statusMessage = "翻译完成"
+                self.overlay.showSuccess(translation: result, theme: self.theme)
+            }
+        } catch {
+            await MainActor.run {
+                self.statusMessage = "翻译失败：\(error.localizedDescription)"
+                self.overlay.showFailure(
+                    sourceText: trimmed,
+                    message: "翻译失败",
+                    theme: self.theme,
+                    retry: { [weak self] in
+                        Task { [weak self] in
+                            guard let self else { return }
+                            await self.translateAndShow(for: trimmed)
+                        }
+                    }
                 )
-
-                await MainActor.run {
-                    self.statusMessage = "翻译完成"
-                    self.overlay.show(translation: result, theme: self.theme)
-                }
-            } catch {
-                await MainActor.run {
-                    self.statusMessage = "翻译失败：\(error.localizedDescription)"
-                }
             }
         }
     }
@@ -106,6 +141,7 @@ enum UserDefaultsKeys {
     static let sourceLanguage = "brush_translate.source"
     static let targetLanguage = "brush_translate.target"
     static let theme = "brush_translate.theme"
+    static let deepseekAPIKey = "brush_translate.deepseek.apiKey"
 }
 
 enum LanguageOption: String, CaseIterable, Identifiable {

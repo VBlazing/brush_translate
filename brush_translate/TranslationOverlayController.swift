@@ -15,21 +15,50 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var trackingArea: NSTrackingArea?
     private var eventMonitor: Any?
 
-    func show(translation: TranslationResult, theme: ThemeOption) {
-        show(view: AnyView(TranslationCardView(translation: translation, theme: theme) { [weak self] hovering in
+    func showSuccess(translation: TranslationResult, theme: ThemeOption) {
+        let data = TranslationCardData(
+            sourceText: translation.originalText,
+            translatedText: translation.translatedText,
+            status: .success,
+            onRetry: nil
+        )
+        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }), theme: theme)
     }
 
     func showPlaceholder(theme: ThemeOption) {
-        let placeholder = TranslationResult(
-            originalText: "",
+        let data = TranslationCardData(
+            sourceText: "",
             translatedText: "",
-            alternatives: [],
-            detectedSource: "",
-            target: ""
+            status: .placeholder,
+            onRetry: nil
         )
-        show(view: AnyView(TranslationCardView(translation: placeholder, theme: theme) { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
+            self?.handleHover(isHovering: hovering)
+        }), theme: theme)
+    }
+
+    func showLoading(sourceText: String, theme: ThemeOption) {
+        let data = TranslationCardData(
+            sourceText: sourceText,
+            translatedText: "",
+            status: .loading,
+            onRetry: nil
+        )
+        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
+            self?.handleHover(isHovering: hovering)
+        }), theme: theme)
+    }
+
+    func showFailure(sourceText: String, message: String, theme: ThemeOption, retry: @escaping () -> Void) {
+        let data = TranslationCardData(
+            sourceText: sourceText,
+            translatedText: message,
+            status: .failure,
+            onRetry: retry
+        )
+        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }), theme: theme)
     }
@@ -38,23 +67,40 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         DispatchQueue.main.async {
             self.dismissTask?.cancel()
             self.ensurePanel()
-            self.panel?.backgroundColor = theme.panelBackgroundColor
-            self.panel?.contentView = NSHostingView(rootView: view)
-            if let hosting = self.panel?.contentView as? NSHostingView<AnyView> {
+            guard let panel = self.panel else { return }
+            let wasVisible = panel.isVisible
+            let previousFrame = panel.frame
+
+            panel.backgroundColor = theme.panelBackgroundColor
+            panel.contentView = NSHostingView(rootView: view)
+
+            if let hosting = panel.contentView as? NSHostingView<AnyView> {
                 let size = hosting.fittingSize
-                self.panel?.setContentSize(size)
+                if wasVisible {
+                    let oldCenter = NSPoint(x: previousFrame.midX, y: previousFrame.midY)
+                    var newFrame = previousFrame
+                    newFrame.size = size
+                    newFrame.origin = NSPoint(x: oldCenter.x - size.width / 2, y: oldCenter.y - size.height / 2)
+                    panel.setFrame(newFrame, display: true, animate: false)
+                } else {
+                    panel.setContentSize(size)
+                }
             }
-            self.repositionPanelToMouseCenter()
-            self.panel?.makeKeyAndOrderFront(nil)
-            self.panel?.orderFrontRegardless()
-            self.panel?.alphaValue = 0
-            self.isHovering = false
+
             self.addClickAwayRecognizer()
 
-            NSApp.activate(ignoringOtherApps: true)
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.1
-                self.panel?.animator().alphaValue = 1
+            if !wasVisible {
+                self.repositionPanelToMouseCenter()
+                panel.makeKeyAndOrderFront(nil)
+                panel.orderFrontRegardless()
+                panel.alphaValue = 0
+                self.isHovering = false
+
+                NSApp.activate(ignoringOtherApps: true)
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.1
+                    panel.animator().alphaValue = 1
+                }
             }
 
         }
@@ -120,28 +166,30 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         doubleClick.buttonMask = 0x1
         panel.contentView?.addGestureRecognizer(doubleClick)
 
-        // Track clicks outside the panel
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
-            guard let self, let panel = self.panel else { return event }
-            // Convert click to panel content coordinates to decide outside/inside
-            let screenPoint: NSPoint
-            if let win = event.window {
-                screenPoint = win.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
-            } else {
-                screenPoint = event.locationInWindow
-            }
-            let panelPoint = panel.convertPoint(fromScreen: screenPoint)
-            if let contentView = panel.contentView {
-                let localPoint = contentView.convert(panelPoint, from: nil)
-                if !contentView.bounds.contains(localPoint) {
+        // Track clicks outside the panel (add only once)
+        if eventMonitor == nil {
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+                guard let self, let panel = self.panel else { return event }
+                // Convert click to panel content coordinates to decide outside/inside
+                let screenPoint: NSPoint
+                if let win = event.window {
+                    screenPoint = win.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
+                } else {
+                    screenPoint = event.locationInWindow
+                }
+                let panelPoint = panel.convertPoint(fromScreen: screenPoint)
+                if let contentView = panel.contentView {
+                    let localPoint = contentView.convert(panelPoint, from: nil)
+                    if !contentView.bounds.contains(localPoint) {
+                        self.hide()
+                        return nil
+                    }
+                } else {
                     self.hide()
                     return nil
                 }
-            } else {
-                self.hide()
-                return nil
+                return event
             }
-            return event
         }
     }
 
