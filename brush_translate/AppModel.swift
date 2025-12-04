@@ -73,7 +73,6 @@ final class AppModel: ObservableObject {
                         self.overlay.showPlaceholder(theme: self.theme)
                     } else {
                         self.statusMessage = "请在“隐私与安全性 > 辅助功能”允许本应用"
-//                        self.overlay.showPlaceholder(message: "请在系统设置开启辅助功能权限", theme: self.theme)
                     }
                 }
                 return
@@ -97,7 +96,6 @@ final class AppModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self.statusMessage = "翻译失败：\(error.localizedDescription)"
-//                    self.overlay.showPlaceholder(message: "翻译失败", theme: self.theme)
                 }
             }
         }

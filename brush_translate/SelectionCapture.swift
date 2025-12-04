@@ -13,16 +13,13 @@ enum SelectionCapture {
     static func captureSelectedText() async -> String? {
         // Prefer Accessibility path
         if requestAccessibilityPermissionIfNeeded() {
-            if let focusedElement = focusedUIElement(),
-               let selected = selectedText(from: focusedElement),
-               selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                return selected.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-
-        // Fallback: simulate Cmd+C and read clipboard
-        if let copied = await copyFromPasteboardSelection() {
+            let copied = await copyFromPasteboardSelection()
             return copied
+//            if let focusedElement = focusedUIElement(),
+//               let selected = selectedText(from: focusedElement),
+//               selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+//                return selected.trimmingCharacters(in: .whitespacesAndNewlines)
+//            }
         }
 
         return nil
@@ -100,11 +97,17 @@ enum SelectionCapture {
 
     private static func copyFromPasteboardSelection() async -> String? {
         let pasteboard = NSPasteboard.general
+        let initialChangeCount = pasteboard.changeCount
         let previousData = pasteboard.data(forType: .string)
         let previousString = pasteboard.string(forType: .string)
 
         sendCopyShortcut()
         try? await Task.sleep(nanoseconds: 200_000_000)
+
+        // If the pasteboard didn't change, no selection was copied; return empty string
+        guard pasteboard.changeCount != initialChangeCount else {
+            return nil
+        }
 
         var copied: String?
         if let data = pasteboard.data(forType: .string), let str = String(data: data, encoding: .utf8) {
@@ -119,10 +122,6 @@ enum SelectionCapture {
         } else if let previousString {
             pasteboard.clearContents()
             pasteboard.setString(previousString, forType: .string)
-        }
-
-        guard let copied, !copied.isEmpty else {
-            return nil
         }
 
         return copied
