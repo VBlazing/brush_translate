@@ -192,7 +192,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return Color(red: 24/255, green: 24/255, blue: 27/255) // #18181b
         case .light:
-            return Color(red: 24/255, green: 24/255, blue: 27/255) // 同一背景
+            return Color(red: 245/255, green: 247/255, blue: 250/255) // 柔和浅灰底
         }
     }
 
@@ -201,7 +201,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return Color(red: 31/255, green: 31/255, blue: 36/255)
         case .light:
-            return Color(red: 31/255, green: 31/255, blue: 36/255)
+            return Color(red: 1.0, green: 1.0, blue: 1.0) // 纯净卡片背景
         }
     }
 
@@ -210,7 +210,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return Color(red: 245/255, green: 245/255, blue: 245/255)
         case .light:
-            return Color(red: 30/255, green: 30/255, blue: 30/255)
+            return Color(red: 28/255, green: 28/255, blue: 30/255)
         }
     }
 
@@ -219,7 +219,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return Color(red: 160/255, green: 160/255, blue: 160/255)
         case .light:
-            return Color(red: 117/255, green: 117/255, blue: 117/255)
+            return Color(red: 82/255, green: 82/255, blue: 90/255)
         }
     }
 
@@ -228,7 +228,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return Color.white.opacity(0.14)
         case .light:
-            return Color.white.opacity(0.14)
+            return Color.black.opacity(0.08)
         }
     }
 
@@ -237,7 +237,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return Color.black.opacity(0.6)
         case .light:
-            return Color.black.opacity(0.6)
+            return Color.black.opacity(0.12)
         }
     }
 
@@ -246,7 +246,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         case .night:
             return NSColor(srgbRed: 24/255, green: 24/255, blue: 27/255, alpha: 0.7)
         case .light:
-            return NSColor(srgbRed: 24/255, green: 24/255, blue: 27/255, alpha: 0.7)
+            return NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 0.9)
         }
     }
 }
