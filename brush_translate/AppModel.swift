@@ -119,11 +119,17 @@ final class AppModel: ObservableObject {
                 self.overlay.showSuccess(translation: result, theme: self.theme)
             }
         } catch {
+            let failureMessage: String
+            if let translationError = error as? TranslationError {
+                failureMessage = translationError.localizedDescription
+            } else {
+                failureMessage = "翻译失败"
+            }
             await MainActor.run {
-                self.statusMessage = "翻译失败：\(error.localizedDescription)"
+                self.statusMessage = "翻译失败：\(failureMessage)"
                 self.overlay.showFailure(
                     sourceText: trimmed,
-                    message: "翻译失败",
+                    message: failureMessage,
                     theme: self.theme,
                     retry: { [weak self] in
                         Task { [weak self] in
@@ -220,6 +226,15 @@ enum ThemeOption: String, CaseIterable, Identifiable {
             return Color(red: 160/255, green: 160/255, blue: 160/255)
         case .light:
             return Color(red: 82/255, green: 82/255, blue: 90/255)
+        }
+    }
+
+    var errorText: Color {
+        switch self {
+        case .night:
+            return Color(red: 255/255, green: 99/255, blue: 99/255)
+        case .light:
+            return Color(red: 220/255, green: 34/255, blue: 34/255)
         }
     }
 

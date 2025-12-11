@@ -163,7 +163,7 @@ struct TranslationCardView: View {
             VStack(spacing: 12) {
                 Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(theme.translateText)
+                    .foregroundColor(theme.errorText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .multilineTextAlignment(.leading)
                 if let onRetry = data.onRetry {

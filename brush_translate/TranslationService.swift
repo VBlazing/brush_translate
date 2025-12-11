@@ -13,6 +13,7 @@ import NaturalLanguage
 struct TranslationResult {
     let originalText: String
     let translatedText: String
+    let form: TranslationForm?
     let alternatives: [String]
     let detectedSource: String
     let target: String
@@ -23,6 +24,7 @@ enum TranslationError: Error {
     case failedToTranslate
     case networkError(String)
     case invalidResponse
+    case serviceError(String)
 }
 
 final class TranslationService {
@@ -31,19 +33,71 @@ final class TranslationService {
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
+        if source != .auto, languageMatchesExpected(text: normalized, expected: source) == false {
+            throw TranslationError.serviceError("语言不一致")
+        }
         return try await translateWithDeepseek(text: normalized, from: source, to: target, apiKey: trimmedKey)
     }
-
     private func translateWithDeepseek(text: String, from source: LanguageOption, to target: LanguageOption, apiKey: String) async throws -> TranslationResult {
         let url = URL(string: "https://api.deepseek.com/v1/chat/completions")!
         let promptSource = source == .auto ? "auto-detect" : source.displayName
+        let schema = """
+{
+    "type": "object",
+    "properties": {
+        "state": {
+            "type": "integer",
+            "description": "Translation success or failure is indicated by a value of 1 (success) and 0 (failure)."
+        },
+        "error_message": {
+            "type": "string",
+            "description": "Translation error message (only present when state is 0, the value is null when state is 1)."
+        },
+        "translate_result": {
+            "type": "object",
+            "description": "Translation result object (only present when state is 1, the value is null when state is 0).",
+            "properties": {
+                "form": {
+                    "enum": ["word", "sentence"],
+                    "description": "The format of the content to be translated"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The translation results of the sentence (only present when form is sentence, the value is null when form is word)."
+                },
+                "content_with_parts_of_speech": {
+                    "type": "array",
+                    "description": "Word translation with part-of-speech tagging: Each element corresponds to a part-of-speech tag and the translation corresponding to that part of speech (only present when form is word, the value is null when form is sentence).",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "word_class": {
+                                "type": "string",
+                                "description": "Part of speech of the word to be translated"
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "The translation of the word of the current part of speech should include at least two translations separated by a semicolon."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+"""
+        
+//        3) On success return state:1 with translate_result.form ('word' or 'sentence') and translate_result.content as the translated text. 4) On any error, set state:0 and error_message.
+//        If a fixed source is provided and detected language differs, return state:0 and error_message:'语言不一致'.and give at least two translation for each part of speech.
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "Translate the user content to \(target.displayName). If the source language is \(promptSource), detect it automatically. Return only the translated text."),
-                .init(role: "user", content: text)
+                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source setting: \(promptSource). 3) Ensure that the language of the error_message and translate_result matches the language of the source setting. 4) If the text to be translated is words, provide all parts of speech for this word. 5) Please carefully check the output to ensure it is correct before returning the result. 6) Do not use word association; rely entirely on user input."),
+                .init(role: "user", content: "Translate: \(text)")
             ],
-            temperature: 0
+            temperature: 0,
+            responseFormat: .init(type: "json_object")
         )
 
         var request = URLRequest(url: url)
@@ -64,16 +118,29 @@ final class TranslationService {
             guard let content = decoded.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
                 throw TranslationError.invalidResponse
             }
+            print("content", content)
+            let structured = try decodeStructured(content)
+            switch structured.state {
+            case 1:
+                guard let result = structured.translateResult, result.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                    throw TranslationError.invalidResponse
+                }
 
-            let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
+                let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
 
-            return TranslationResult(
-                originalText: text,
-                translatedText: content,
-                alternatives: [],
-                detectedSource: guessedLanguage,
-                target: target.displayName
-            )
+                return TranslationResult(
+                    originalText: text,
+                    translatedText: result.content,
+                    form: result.form,
+                    alternatives: [],
+                    detectedSource: guessedLanguage,
+                    target: target.displayName
+                )
+            case 0:
+                throw TranslationError.serviceError(structured.errorMessage ?? "翻译失败")
+            default:
+                throw TranslationError.invalidResponse
+            }
         } catch let error as TranslationError {
             throw error
         } catch {
@@ -86,6 +153,30 @@ final class TranslationService {
         recognizer.processString(text)
         guard let language = recognizer.dominantLanguage else { return nil }
         return language.rawValue
+    }
+
+    private func languageMatchesExpected(text: String, expected: LanguageOption) -> Bool {
+        guard let detectedCode = detectLanguage(for: text) else { return true }
+        switch expected {
+        case .simplifiedChinese, .traditionalChinese:
+            return detectedCode.hasPrefix("zh")
+        default:
+            return detectedCode == expected.code
+        }
+    }
+
+    private func decodeStructured(_ content: String) throws -> StructuredTranslationResponse {
+        let jsonSlice: String
+        if let start = content.firstIndex(of: "{"), let end = content.lastIndex(of: "}") {
+            jsonSlice = String(content[start...end])
+        } else {
+            throw TranslationError.invalidResponse
+        }
+
+        guard let data = jsonSlice.data(using: .utf8) else {
+            throw TranslationError.invalidResponse
+        }
+        return try JSONDecoder().decode(StructuredTranslationResponse.self, from: data)
     }
 
     private func detectedDisplayName(for text: String, fallback: String) -> String {
@@ -116,9 +207,21 @@ private struct DeepseekRequest: Encodable {
         let content: String
     }
 
+    struct ResponseFormat: Encodable {
+        let type: String
+    }
+
     let model: String
     let messages: [Message]
     let temperature: Double
+    let responseFormat: ResponseFormat
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case temperature
+        case responseFormat = "response_format"
+    }
 }
 
 private struct DeepseekResponse: Decodable {
@@ -133,6 +236,28 @@ private struct DeepseekResponse: Decodable {
     let choices: [Choice]
 }
 
+private struct StructuredTranslationResponse: Decodable {
+    struct TranslateResult: Decodable {
+        let form: TranslationForm
+        let content: String
+    }
+
+    let state: Int
+    let errorMessage: String?
+    let translateResult: TranslateResult?
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case errorMessage = "error_message"
+        case translateResult = "translate_result"
+    }
+}
+
+enum TranslationForm: String, Decodable {
+    case word
+    case sentence
+}
+
 extension TranslationError: LocalizedError {
     var errorDescription: String? {
         switch self {
@@ -144,6 +269,8 @@ extension TranslationError: LocalizedError {
             return message
         case .invalidResponse:
             return "翻译服务返回无效数据"
+        case .serviceError(let message):
+            return message
         }
     }
 }
