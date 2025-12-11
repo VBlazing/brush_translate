@@ -19,6 +19,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: translation.originalText,
             translatedText: translation.translatedText,
+            form: translation.form,
+            wordParts: translation.wordParts,
             status: .success,
             onRetry: nil
         )
@@ -31,6 +33,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: "",
             translatedText: "",
+            form: nil,
+            wordParts: [],
             status: .placeholder,
             onRetry: nil
         )
@@ -43,6 +47,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: "",
+            form: nil,
+            wordParts: [],
             status: .loading,
             onRetry: nil
         )
@@ -55,6 +61,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: message,
+            form: nil,
+            wordParts: [],
             status: .failure,
             onRetry: retry
         )

@@ -113,11 +113,12 @@ struct TranslationCardView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .multilineTextAlignment(.leading)
                     .lineSpacing(6)
-
                 Spacer()
-                translationSection
+                VStack {
+                    translationSection
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-//            The function cannot complete because messaging failed in some way or because the application with
             .padding(.vertical, 40)
             .padding(.horizontal, 60)
             .background(
@@ -153,12 +154,27 @@ struct TranslationCardView: View {
             .foregroundColor(theme.translateText)
             .frame(maxWidth: .infinity, alignment: .center)
         case .success:
-            Text(data.translatedText.isEmpty ? "无翻译" : data.translatedText)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(theme.translateText)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .multilineTextAlignment(.leading)
-                .lineSpacing(6)
+            if data.form == .word {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(wordLines(from: data), id: \.self) { line in
+                        HStack(alignment: .center, spacing: 10) {
+                            tagView(title: line.tag)
+                            Text(line.text)
+                                .foregroundColor(theme.translateText)
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(alignment: .center)
+                        }
+                    }
+                }
+                .frame(alignment: .center)
+            } else {
+                Text(data.translatedText.isEmpty ? "无翻译" : data.translatedText)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(theme.translateText)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing(6)
+            }
         case .failure:
             VStack(spacing: 12) {
                 Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
@@ -173,6 +189,52 @@ struct TranslationCardView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
         }
+    }
+
+    private func tagView(title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(theme.translateText.opacity(0.12))
+            .foregroundColor(theme.translateText)
+            .clipShape(Capsule())
+    }
+
+    private struct WordLine: Hashable {
+        let line: String
+        let tag: String
+        let text: String
+    }
+
+    private func parseWordLines(_ content: String) -> [WordLine] {
+        content
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { line in
+                if let range = line.range(of: ":") ?? line.range(of: "：") {
+                    let tag = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    let text = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+                    return WordLine(line: line, tag: tag.isEmpty ? "词性" : tag, text: text.isEmpty ? line : text)
+                }
+                let parts = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+                if let first = parts.first, parts.count > 1 {
+                    let tag = String(first)
+                    let text = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                    return WordLine(line: line, tag: tag, text: text.isEmpty ? line : text)
+                }
+                return WordLine(line: line, tag: "词性", text: line)
+            }
+    }
+
+    private func wordLines(from data: TranslationCardData) -> [WordLine] {
+        if !data.wordParts.isEmpty {
+            return data.wordParts.map { part in
+                WordLine(line: "\(part.wordClass) \(part.content)", tag: part.wordClass, text: part.content)
+            }
+        }
+        return parseWordLines(data.translatedText)
     }
 }
 
@@ -191,6 +253,8 @@ struct TranslationCardData {
 
     let sourceText: String
     let translatedText: String
+    let form: TranslationForm?
+    let wordParts: [WordPart]
     let status: Status
     let onRetry: (() -> Void)?
 }

@@ -14,6 +14,7 @@ struct TranslationResult {
     let originalText: String
     let translatedText: String
     let form: TranslationForm?
+    let wordParts: [WordPart]
     let alternatives: [String]
     let detectedSource: String
     let target: String
@@ -93,7 +94,7 @@ final class TranslationService {
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source setting: \(promptSource). 3) Ensure that the language of the error_message and translate_result matches the language of the source setting. 4) If the text to be translated is words, provide all parts of speech for this word. 5) Please carefully check the output to ensure it is correct before returning the result. 6) Do not use word association; rely entirely on user input."),
+                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source setting: \(promptSource). 3) Ensure that the structured content of the output is consistent with the target language. 4) If the text to be translated is words, provide all parts of speech for this word. 5) Please carefully check the output to ensure it is correct before returning the result. 6) Do not use word association; rely entirely on user input."),
                 .init(role: "user", content: "Translate: \(text)")
             ],
             temperature: 0,
@@ -122,20 +123,39 @@ final class TranslationService {
             let structured = try decodeStructured(content)
             switch structured.state {
             case 1:
-                guard let result = structured.translateResult, result.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-                    throw TranslationError.invalidResponse
-                }
-
+                guard let result = structured.translateResult else { throw TranslationError.invalidResponse }
                 let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
 
-                return TranslationResult(
-                    originalText: text,
-                    translatedText: result.content,
-                    form: result.form,
-                    alternatives: [],
-                    detectedSource: guessedLanguage,
-                    target: target.displayName
-                )
+                switch result.form {
+                case .sentence:
+                    guard let content = result.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
+                        throw TranslationError.invalidResponse
+                    }
+                    return TranslationResult(
+                        originalText: text,
+                        translatedText: content,
+                        form: result.form,
+                        wordParts: [],
+                        alternatives: [],
+                        detectedSource: guessedLanguage,
+                        target: target.displayName
+                    )
+                case .word:
+                    guard let parts = result.contentWithPartsOfSpeech, parts.isEmpty == false else {
+                        throw TranslationError.invalidResponse
+                    }
+                    let mapped = parts.map { WordPart(wordClass: $0.wordClass, content: $0.content) }
+                    let joined = mapped.map { "\($0.wordClass): \($0.content)" }.joined(separator: "\n")
+                    return TranslationResult(
+                        originalText: text,
+                        translatedText: joined,
+                        form: result.form,
+                        wordParts: mapped,
+                        alternatives: [],
+                        detectedSource: guessedLanguage,
+                        target: target.displayName
+                    )
+                }
             case 0:
                 throw TranslationError.serviceError(structured.errorMessage ?? "翻译失败")
             default:
@@ -239,7 +259,24 @@ private struct DeepseekResponse: Decodable {
 private struct StructuredTranslationResponse: Decodable {
     struct TranslateResult: Decodable {
         let form: TranslationForm
+        let content: String?
+        let contentWithPartsOfSpeech: [WordPartResponse]?
+
+        enum CodingKeys: String, CodingKey {
+            case form
+            case content
+            case contentWithPartsOfSpeech = "content_with_parts_of_speech"
+        }
+    }
+
+    struct WordPartResponse: Decodable {
+        let wordClass: String
         let content: String
+
+        enum CodingKeys: String, CodingKey {
+            case wordClass = "word_class"
+            case content
+        }
     }
 
     let state: Int
@@ -256,6 +293,11 @@ private struct StructuredTranslationResponse: Decodable {
 enum TranslationForm: String, Decodable {
     case word
     case sentence
+}
+
+struct WordPart: Hashable, Decodable {
+    let wordClass: String
+    let content: String
 }
 
 extension TranslationError: LocalizedError {
