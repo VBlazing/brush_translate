@@ -145,8 +145,9 @@ struct TranslationCardView: View {
                 .multilineTextAlignment(.leading)
                 .lineSpacing(6)
         case .loading:
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ProgressView()
+                    .scaleEffect(0.6)
                     .progressViewStyle(.circular)
                 Text("翻译中...")
             }
