@@ -89,12 +89,10 @@ final class TranslationService {
 }
 """
         
-//        3) On success return state:1 with translate_result.form ('word' or 'sentence') and translate_result.content as the translated text. 4) On any error, set state:0 and error_message.
-//        If a fixed source is provided and detected language differs, return state:0 and error_message:'语言不一致'.and give at least two translation for each part of speech.
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source setting: \(promptSource). 3) Ensure that the structured content of the output is consistent with the target language. 4) If the text to be translated is words, provide all parts of speech for this word. 5) Please carefully check the output to ensure it is correct before returning the result. 6) Do not use word association; rely entirely on user input."),
+                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source setting: \(promptSource). 3) TThe user input format is 'Translate: text', which directly and accurately translates the text following 'Translate'. 4) Ensure that the structured content and error messages in the output are consistent with the target language. 5) If the text to be translated is words, provide all parts of speech for this word. 6) Please carefully check the output to ensure it is correct before returning the result. 7) Do not use word association; rely entirely on user input."),
                 .init(role: "user", content: "Translate: \(text)")
             ],
             temperature: 0,
