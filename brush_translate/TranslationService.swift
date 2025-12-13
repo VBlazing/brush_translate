@@ -28,6 +28,38 @@ enum TranslationError: Error {
     case serviceError(String)
 }
 
+//"content_with_constituent": {
+//    "type": "object",
+//    "description": "The translation of the sentence and the words and phrases that make up the sentence(only present when form is sentence, the value is null when form is word).",
+//    "properties": {
+//        "content": {
+//            "type": "string",
+//            "description": "Translation of the current sentence."
+//        },
+//        "constituent_list": {
+//            "type": "array",
+//            "description": "The list of words and phrases that make up a sentence, and their translations in the current context.",
+//            "items": {
+//                "type": "object",
+//                "properties": {
+//                    "constituent": {
+//                        "type": "string",
+//                        "description": "The words and phrases that make up a sentence"
+//                    },
+//                    "word_class": {
+//                        "type": "string",
+//                        "description": "Part of speech of the current constituent within the context of the sentence being translated."
+//                    },
+//                    "translation": {
+//                        "type": "string",
+//                        "description": "The translation of current constituent within the context of the sentence being translated."
+//                    }
+//                }
+//            }
+//        }
+//    }
+//},
+
 final class TranslationService {
     func translate(text: String, from source: LanguageOption, to target: LanguageOption, apiKey: String?) async throws -> TranslationResult {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -92,7 +124,7 @@ final class TranslationService {
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source language: \(promptSource). 3) The user input format is 'Translate: text', which directly and accurately translates the text following 'Translate'. 4) Ensure that the structured content and error messages in the output are consistent with the target language. 5) If the text to be translated is words, provide all parts of speech for this word. 6) Please carefully check the output to ensure it is correct before returning the result. 7) Do not use word association; rely entirely on user input."),
+                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source language: \(promptSource). 3) The user input format is 'Translate: text', which directly and accurately translates the text following 'Translate'. 4) Ensure that the structured content and error messages in the output are consistent with the target language. 5) If the text to be translated is words, provide all parts of speech for this word. 6) If the text to be translated is a sentence, analyze the sentence, extract each component of the sentence, translate them, and add them to the constant_list (Phrases have higher priority than words; if the constituent parts can form a phrase, the phrase is returned first). 7) Please carefully check the output to ensure it is correct before returning the result. 8) Do not use word association; rely entirely on user input."),
                 .init(role: "user", content: "Translate: \(text)")
             ],
             temperature: 0,

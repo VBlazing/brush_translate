@@ -103,24 +103,35 @@ struct TranslationCardView: View {
     let data: TranslationCardData
     let theme: ThemeOption
     let onHoverChange: (Bool) -> Void
+    let onSpeak: (() -> Void)?
+    let onSaveNote: (() -> Void)?
+
+    @State private var hoverSpeak = false
+    @State private var hoverNote = false
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                Text(data.sourceText.isEmpty ? "未获取到选中文本" : data.sourceText)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(theme.sourceText)
+                toolbar
+                    .padding(.bottom, 8)
+                VStack() {
+                    Text(data.sourceText.isEmpty ? "未获取到选中文本" : data.sourceText)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(theme.sourceText)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.leading)
+                        .lineSpacing(6)
+                    Spacer()
+                    VStack {
+                        translationSection
+                    }
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing(6)
-                Spacer()
-                VStack {
-                    translationSection
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
             }
-            .padding(.vertical, 40)
-            .padding(.horizontal, 60)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 20)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(theme.cardBackground)
@@ -132,6 +143,44 @@ struct TranslationCardView: View {
         .onHover { hovering in
             onHoverChange(hovering)
         }
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 12) {
+            Spacer()
+            Button(action: { onSpeak?() }) {
+                Image(systemName: "speaker.wave.2.fill")
+                    .imageScale(.medium)
+            }
+            .buttonStyle(.plain)
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(theme.translateText.opacity(hoverSpeak ? 0.12 : 0))
+            )
+            .foregroundColor(theme.translateText.opacity(data.sourceText.isEmpty ? 0.3 : 1))
+            .scaleEffect(hoverSpeak ? 1.05 : 1.0)
+            .animation(.easeInOut(duration: 0.12), value: hoverSpeak)
+            .onHover { hover in hoverSpeak = hover }
+            .disabled(data.sourceText.isEmpty)
+
+//            Button(action: { onSaveNote?() }) {
+//                Image(systemName: "note.text")
+//                    .imageScale(.medium)
+//            }
+//            .buttonStyle(.plain)
+//            .padding(4)
+//            .background(
+//                RoundedRectangle(cornerRadius: 10, style: .continuous)
+//                    .fill(theme.translateText.opacity(hoverNote ? 0.12 : 0))
+//            )
+//            .foregroundColor(theme.translateText.opacity(data.sourceText.isEmpty ? 0.3 : 1))
+//            .scaleEffect(hoverNote ? 1.05 : 1.0)
+//            .animation(.easeInOut(duration: 0.12), value: hoverNote)
+//            .onHover { hover in hoverNote = hover }
+//            .disabled(data.sourceText.isEmpty)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     @ViewBuilder
@@ -258,4 +307,6 @@ struct TranslationCardData {
     let wordParts: [WordPart]
     let status: Status
     let onRetry: (() -> Void)?
+    let onSpeak: (() -> Void)?
+    let onSaveNote: (() -> Void)?
 }

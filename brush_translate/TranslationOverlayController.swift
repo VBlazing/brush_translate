@@ -22,11 +22,13 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             form: translation.form,
             wordParts: translation.wordParts,
             status: .success,
-            onRetry: nil
+            onRetry: nil,
+            onSpeak: { [weak self] in self?.speak(text: translation.originalText) },
+            onSaveNote: { [weak self] in self?.saveNote(source: translation.originalText, translated: translation.translatedText) }
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }), theme: theme)
+        }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote)), theme: theme)
     }
 
     func showPlaceholder(theme: ThemeOption) {
@@ -36,11 +38,13 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             form: nil,
             wordParts: [],
             status: .placeholder,
-            onRetry: nil
+            onRetry: nil,
+            onSpeak: nil,
+            onSaveNote: nil
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }), theme: theme)
+        }, onSpeak: nil, onSaveNote: nil)), theme: theme)
     }
 
     func showLoading(sourceText: String, theme: ThemeOption) {
@@ -50,11 +54,13 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             form: nil,
             wordParts: [],
             status: .loading,
-            onRetry: nil
+            onRetry: nil,
+            onSpeak: nil,
+            onSaveNote: nil
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }), theme: theme)
+        }, onSpeak: nil, onSaveNote: nil)), theme: theme)
     }
 
     func showFailure(sourceText: String, message: String, theme: ThemeOption, retry: @escaping () -> Void) {
@@ -64,11 +70,21 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             form: nil,
             wordParts: [],
             status: .failure,
-            onRetry: retry
+            onRetry: retry,
+            onSpeak: { [weak self] in self?.speak(text: sourceText) },
+            onSaveNote: nil
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme) { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }), theme: theme)
+        }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote)), theme: theme)
+    }
+
+    private func speak(text: String) {
+        SpeechSynthesizer.shared.speak(text: text)
+    }
+
+    private func saveNote(source: String, translated: String) {
+        NoteStore.shared.add(source: source, translated: translated)
     }
 
     private func show(view: AnyView, theme: ThemeOption) {
