@@ -196,7 +196,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var background: Color {
         switch self {
         case .night:
-            return Color(red: 24/255, green: 24/255, blue: 27/255) // #18181b
+            return Color(red: 31/255, green: 31/255, blue: 36/255) // brighter dark
         case .light:
             return Color(red: 245/255, green: 247/255, blue: 250/255) // 柔和浅灰底
         }
@@ -205,7 +205,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var cardBackground: Color {
         switch self {
         case .night:
-            return Color(red: 31/255, green: 31/255, blue: 36/255)
+            return Color(red: 39/255, green: 39/255, blue: 48/255)
         case .light:
             return Color(red: 1.0, green: 1.0, blue: 1.0) // 纯净卡片背景
         }
@@ -214,7 +214,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var sourceText: Color {
         switch self {
         case .night:
-            return Color(red: 245/255, green: 245/255, blue: 245/255)
+            return Color(red: 240/255, green: 240/255, blue: 242/255)
         case .light:
             return Color(red: 28/255, green: 28/255, blue: 30/255)
         }
@@ -223,7 +223,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var translateText: Color {
         switch self {
         case .night:
-            return Color(red: 160/255, green: 160/255, blue: 160/255)
+            return Color(red: 200/255, green: 203/255, blue: 210/255)
         case .light:
             return Color(red: 82/255, green: 82/255, blue: 90/255)
         }
@@ -232,7 +232,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var errorText: Color {
         switch self {
         case .night:
-            return Color(red: 255/255, green: 99/255, blue: 99/255)
+            return Color(red: 255/255, green: 111/255, blue: 111/255)
         case .light:
             return Color(red: 220/255, green: 34/255, blue: 34/255)
         }
@@ -241,7 +241,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var divider: Color {
         switch self {
         case .night:
-            return Color.white.opacity(0.14)
+            return Color.white.opacity(0.18)
         case .light:
             return Color.black.opacity(0.08)
         }
@@ -250,7 +250,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var shadow: Color {
         switch self {
         case .night:
-            return Color.black.opacity(0.6)
+            return Color.black.opacity(0.45)
         case .light:
             return Color.black.opacity(0.12)
         }
@@ -259,7 +259,7 @@ enum ThemeOption: String, CaseIterable, Identifiable {
     var panelBackgroundColor: NSColor {
         switch self {
         case .night:
-            return NSColor(srgbRed: 24/255, green: 24/255, blue: 27/255, alpha: 0.7)
+            return NSColor(srgbRed: 31/255, green: 31/255, blue: 36/255, alpha: 0.75)
         case .light:
             return NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 0.9)
         }

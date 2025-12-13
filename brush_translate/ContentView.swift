@@ -147,12 +147,12 @@ struct TranslationCardView: View {
         case .loading:
             HStack(spacing: 6) {
                 ProgressView()
+                    .tint(theme.translateText)
                     .scaleEffect(0.6)
-                    .progressViewStyle(.circular)
                 Text("翻译中...")
+                    .foregroundColor(theme.translateText)
             }
             .font(.system(size: 18, weight: .medium))
-            .foregroundColor(theme.translateText)
             .frame(maxWidth: .infinity, alignment: .center)
         case .success:
             if data.form == .word {
