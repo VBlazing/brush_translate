@@ -105,15 +105,17 @@ struct TranslationCardView: View {
     let onHoverChange: (Bool) -> Void
     let onSpeak: (() -> Void)?
     let onSaveNote: (() -> Void)?
+    let onAnalyze: (() -> Void)?
 
     @State private var hoverSpeak = false
     @State private var hoverNote = false
+    @State private var hoverAnalyze = false
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 toolbar
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 20)
                 VStack() {
                     Text(data.sourceText.isEmpty ? "未获取到选中文本" : data.sourceText)
                         .font(.system(size: 20, weight: .semibold))
@@ -121,14 +123,14 @@ struct TranslationCardView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .multilineTextAlignment(.leading)
                         .lineSpacing(6)
-                    Spacer()
+                        .padding(.bottom, 25)
                     VStack {
                         translationSection
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 10)
+                Spacer()
             }
             .padding(.vertical, 20)
             .padding(.horizontal, 20)
@@ -146,7 +148,7 @@ struct TranslationCardView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 2) {
             Spacer()
             Button(action: { onSpeak?() }) {
                 Image(systemName: "speaker.wave.2.fill")
@@ -179,6 +181,30 @@ struct TranslationCardView: View {
 //            .animation(.easeInOut(duration: 0.12), value: hoverNote)
 //            .onHover { hover in hoverNote = hover }
 //            .disabled(data.sourceText.isEmpty)
+            if data.showAnalyzeButton {
+                if data.isAnalyzing {
+                    ProgressView()
+                        .tint(theme.translateText)
+                        .scaleEffect(0.7)
+                        .frame(width: 28, height: 28)
+                } else {
+                    Button(action: { onAnalyze?() }) {
+                        Image(systemName: "text.magnifyingglass")
+                            .imageScale(.medium)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(theme.translateText.opacity(hoverAnalyze ? 0.12 : 0))
+                    )
+                    .foregroundColor(theme.translateText.opacity(data.sourceText.isEmpty ? 0.3 : 1))
+                    .scaleEffect(hoverAnalyze ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.12), value: hoverAnalyze)
+                    .onHover { hover in hoverAnalyze = hover }
+                    .disabled(data.sourceText.isEmpty)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
@@ -309,4 +335,7 @@ struct TranslationCardData {
     let onRetry: (() -> Void)?
     let onSpeak: (() -> Void)?
     let onSaveNote: (() -> Void)?
+    let onAnalyze: (() -> Void)?
+    let showAnalyzeButton: Bool
+    let isAnalyzing: Bool
 }
