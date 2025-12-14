@@ -141,6 +141,11 @@ struct TranslationCardView: View {
             )
             .frame(width: 520)
             .edgesIgnoringSafeArea(.all)
+            if let toast = data.toast {
+                ToastView(toast: toast, theme: theme)
+                    .padding(.bottom, 12)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            }
         }
         .onHover { hovering in
             onHoverChange(hovering)
@@ -338,4 +343,35 @@ struct TranslationCardData {
     let onAnalyze: (() -> Void)?
     let showAnalyzeButton: Bool
     let isAnalyzing: Bool
+    let toast: ToastData?
+}
+
+struct ToastData {
+    enum Kind {
+        case success
+        case failure
+    }
+    let kind: Kind
+    let message: String
+}
+
+struct ToastView: View {
+    let toast: ToastData
+    let theme: ThemeOption
+
+    var body: some View {
+        HStack {
+            Image(systemName: toast.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .imageScale(.medium)
+            Text(toast.message)
+                .font(.footnote)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill((toast.kind == .success ? theme.translateText : theme.errorText).opacity(0.12))
+        )
+        .foregroundColor(toast.kind == .success ? theme.translateText : theme.errorText)
+    }
 }

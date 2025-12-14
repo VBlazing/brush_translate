@@ -20,12 +20,24 @@ struct TranslationResult {
     let target: String
 }
 
+struct SentenceAnalysis {
+    let state: Int
+    let constituents: [Constituent]
+
+    struct Constituent: Hashable {
+        let text: String
+        let translation: String
+        let wordClass: String
+    }
+}
+
 enum TranslationError: Error {
     case missingAPIKey
     case failedToTranslate
     case networkError(String)
     case invalidResponse
     case serviceError(String)
+    case analyzeFailed(String)
 }
 
 final class TranslationService {
@@ -88,9 +100,9 @@ final class TranslationService {
     }
 }
 """
-        
+
 //        6) If the text to be translated is a sentence, analyze the sentence, extract each component of the sentence, translate them, and add them to the constant_list (Phrases have higher priority than words; if the constituent parts can form a phrase, the phrase is returned first)
-        
+
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
@@ -161,6 +173,102 @@ final class TranslationService {
             default:
                 throw TranslationError.invalidResponse
             }
+        } catch let error as TranslationError {
+            throw error
+        } catch {
+            throw TranslationError.networkError(error.localizedDescription)
+        }
+    }
+
+    func analyze(text: String, apiKey: String?) async throws -> SentenceAnalysis {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
+        let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
+
+        let url = URL(string: "https://api.deepseek.com/v1/chat/completions")!
+        let analyzeSchema = """
+{
+    "type": "object",
+    "properties": {
+        "state": {
+          "type": "integer",
+          "description": "Sentence parsing status (0 indicates failure, 1 indicates success)."
+        },
+        "constituent_list": {
+            "type": "array",
+            "description": "The list of words and phrases that make up a sentence, and their translations in the current context.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "constituent": {
+                        "type": "string",
+                        "description": "The words and phrases that make up a sentence"
+                    },
+                    "word_class": {
+                        "type": "string",
+                        "description": "Part of speech of the current constituent within the context of the sentence being translated."
+                    },
+                    "translation": {
+                        "type": "string",
+                        "description": "The translation of current constituent within the context of the sentence being translated."
+                    }
+                }
+            }
+        }
+    }
+}
+"""
+
+        let requestBody = DeepseekRequest(
+            model: "deepseek-chat",
+            messages: [
+                .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: analyze the sentence into constituents with context-aware translations and part of speech. If parsing fails, set state to 0 and include an error_message if available."),
+                .init(role: "user", content: "Analyze and translate constituents for: \(normalized)")
+            ],
+            temperature: 0,
+            responseFormat: .init(type: "json_object")
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        request.timeoutInterval = 15
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                let message = String(data: data, encoding: .utf8) ?? "Unexpected response"
+                throw TranslationError.networkError("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(message)")
+            }
+
+            let decoded = try JSONDecoder().decode(DeepseekResponse.self, from: data)
+            guard let content = decoded.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
+                throw TranslationError.invalidResponse
+            }
+            
+            print("content", content)
+
+            let jsonSlice: String
+            if let start = content.firstIndex(of: "{"), let end = content.lastIndex(of: "}") {
+                jsonSlice = String(content[start...end])
+            } else {
+                throw TranslationError.invalidResponse
+            }
+
+            guard let jsonData = jsonSlice.data(using: .utf8) else {
+                throw TranslationError.invalidResponse
+            }
+            let parsed = try JSONDecoder().decode(AnalyzeResponse.self, from: jsonData)
+
+            guard parsed.state == 1, let list = parsed.constituentList, list.isEmpty == false else {
+                throw TranslationError.analyzeFailed("解析失败")
+            }
+
+            let constituents = list.map { SentenceAnalysis.Constituent(text: $0.constituent, translation: $0.translation, wordClass: $0.wordClass) }
+            return SentenceAnalysis(state: parsed.state, constituents: constituents)
         } catch let error as TranslationError {
             throw error
         } catch {
@@ -290,6 +398,30 @@ private struct StructuredTranslationResponse: Decodable {
     }
 }
 
+private struct AnalyzeResponse: Decodable {
+    struct AnalyzeItem: Decodable {
+        let constituent: String
+        let wordClass: String
+        let translation: String
+
+        enum CodingKeys: String, CodingKey {
+            case constituent
+            case wordClass = "word_class"
+            case translation
+        }
+    }
+
+    let state: Int
+    let constituentList: [AnalyzeItem]?
+    let errorMessage: String?
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case constituentList = "constituent_list"
+        case errorMessage = "error_message"
+    }
+}
+
 enum TranslationForm: String, Decodable {
     case word
     case sentence
@@ -312,6 +444,8 @@ extension TranslationError: LocalizedError {
         case .invalidResponse:
             return "翻译服务返回无效数据"
         case .serviceError(let message):
+            return message
+        case .analyzeFailed(let message):
             return message
         }
     }

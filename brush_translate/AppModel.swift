@@ -19,6 +19,8 @@ final class AppModel: ObservableObject {
     private let translator = TranslationService()
     private let overlay = TranslationOverlayController()
     private var cancellables = Set<AnyCancellable>()
+    private var lastTranslation: TranslationResult?
+    private var lastAnalysis: SentenceAnalysis?
 
     init() {
         let storedSource = UserDefaults.standard.string(forKey: UserDefaultsKeys.sourceLanguage) ?? LanguageOption.auto.code
@@ -116,7 +118,15 @@ final class AppModel: ObservableObject {
 
             await MainActor.run {
                 self.statusMessage = "翻译完成"
-                self.overlay.showSuccess(translation: result, theme: self.theme)
+                self.lastTranslation = result
+                self.lastAnalysis = nil
+                self.overlay.showSuccess(
+                    translation: result,
+                    theme: self.theme,
+                    onAnalyze: { [weak self] in
+                        self?.startAnalyze()
+                    }
+                )
             }
         } catch {
             let failureMessage: String
@@ -138,6 +148,63 @@ final class AppModel: ObservableObject {
                         }
                     }
                 )
+            }
+        }
+    }
+
+    private func startAnalyze() {
+        guard let translation = lastTranslation, translation.form == .sentence else { return }
+        Task {
+            await MainActor.run {
+                self.overlay.showSuccess(
+                    translation: translation,
+                    theme: self.theme,
+                    isAnalyzing: true,
+                    onAnalyze: { [weak self] in self?.startAnalyze() }
+                )
+            }
+
+            do {
+                let analysis = try await translator.analyze(text: translation.originalText, apiKey: deepseekAPIKey)
+                self.lastAnalysis = analysis
+                await MainActor.run {
+                    self.overlay.showSuccess(
+                        translation: translation,
+                        theme: self.theme,
+                        isAnalyzing: false,
+                        toast: ToastData(kind: .success, message: "解析成功"),
+                        onAnalyze: { [weak self] in self?.startAnalyze() }
+                    )
+                }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await MainActor.run {
+                    self.overlay.showSuccess(
+                        translation: translation,
+                        theme: self.theme,
+                        isAnalyzing: false,
+                        onAnalyze: { [weak self] in self?.startAnalyze() }
+                    )
+                }
+            } catch {
+                let message = (error as? TranslationError)?.localizedDescription ?? "解析失败"
+                await MainActor.run {
+                    self.overlay.showSuccess(
+                        translation: translation,
+                        theme: self.theme,
+                        isAnalyzing: false,
+                        toast: ToastData(kind: .failure, message: message),
+                        onAnalyze: { [weak self] in self?.startAnalyze() }
+                    )
+                }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await MainActor.run {
+                    self.overlay.showSuccess(
+                        translation: translation,
+                        theme: self.theme,
+                        isAnalyzing: false,
+                        onAnalyze: { [weak self] in self?.startAnalyze() }
+                    )
+                }
             }
         }
     }

@@ -15,7 +15,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var trackingArea: NSTrackingArea?
     private var eventMonitor: Any?
 
-    func showSuccess(translation: TranslationResult, theme: ThemeOption) {
+    func showSuccess(translation: TranslationResult, theme: ThemeOption, isAnalyzing: Bool = false, toast: ToastData? = nil, onAnalyze: (() -> Void)? = nil) {
         let data = TranslationCardData(
             sourceText: translation.originalText,
             translatedText: translation.translatedText,
@@ -25,9 +25,10 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onRetry: nil,
             onSpeak: { [weak self] in self?.speak(text: translation.originalText) },
             onSaveNote: { [weak self] in self?.saveNote(source: translation.originalText, translated: translation.translatedText) },
-            onAnalyze: nil,
+            onAnalyze: onAnalyze,
             showAnalyzeButton: translation.form == .sentence,
-            isAnalyzing: false
+            isAnalyzing: isAnalyzing,
+            toast: toast
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -46,7 +47,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSaveNote: nil,
             onAnalyze: nil,
             showAnalyzeButton: false,
-            isAnalyzing: false
+            isAnalyzing: false,
+            toast: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -65,7 +67,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSaveNote: nil,
             onAnalyze: nil,
             showAnalyzeButton: false,
-            isAnalyzing: false
+            isAnalyzing: false,
+            toast: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -84,7 +87,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSaveNote: nil,
             onAnalyze: nil,
             showAnalyzeButton: false,
-            isAnalyzing: false
+            isAnalyzing: false,
+            toast: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
