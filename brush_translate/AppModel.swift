@@ -165,7 +165,13 @@ final class AppModel: ObservableObject {
             }
 
             do {
-                let analysis = try await translator.analyze(text: translation.originalText, apiKey: deepseekAPIKey)
+                let analysis = try await translator.analyze(
+                    text: translation.originalText,
+                    translated: translation.translatedText,
+                    apiKey: deepseekAPIKey,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
+                )
                 self.lastAnalysis = analysis
                 await MainActor.run {
                     self.overlay.showSuccess(

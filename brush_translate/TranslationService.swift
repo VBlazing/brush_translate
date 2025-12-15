@@ -180,9 +180,10 @@ final class TranslationService {
         }
     }
 
-    func analyze(text: String, apiKey: String?) async throws -> SentenceAnalysis {
+    func analyze(text: String, translated: String, apiKey: String?, sourceLanguage: LanguageOption, targetLanguage: LanguageOption) async throws -> SentenceAnalysis {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
+        let translatedTrimmed = translated.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
 
@@ -219,12 +220,12 @@ final class TranslationService {
     }
 }
 """
-
+//        举个例子：get up 拆分为 get 和 up时无法表达意思，所以拆分结果为 get up，其余情况都赢拆分为
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: analyze the sentence into constituents with context-aware translations and part of speech. If parsing fails, set state to 0 and include an error_message if available."),
-                .init(role: "user", content: "Analyze and translate constituents for: \(normalized)")
+                .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a sentence to be translated (Source sentence) and a sentence already translated into the target language (Translated sentence). 4) Analyze each component of the Source sentence and translate them, while also providing their parts of speech. Each component's translation should correspond one-to-one with the translated sentence. 5) The analysis results of the source sentence should include phrases and words. If a phrase cannot accurately express its meaning after being further broken down into words, then the phrase will appear in the breakdown results. 6) Ensure that the structured content in the output are consistent with the target language."),
+                .init(role: "user", content: "Source sentence: \(normalized)\nTranslated sentence: \(translatedTrimmed)\nProvide constituent translations in the target language only.")
             ],
             temperature: 0,
             responseFormat: .init(type: "json_object")
@@ -281,6 +282,14 @@ final class TranslationService {
         recognizer.processString(text)
         guard let language = recognizer.dominantLanguage else { return nil }
         return language.rawValue
+    }
+
+    private func sourceLanguageDisplay(from option: LanguageOption) -> String {
+        option.displayName
+    }
+
+    private func targetLanguageDisplay(from option: LanguageOption) -> String {
+        option.displayName
     }
 
     private func languageMatchesExpected(text: String, expected: LanguageOption) -> Bool {
