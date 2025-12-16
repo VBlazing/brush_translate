@@ -196,23 +196,39 @@ final class TranslationService {
           "type": "integer",
           "description": "Sentence parsing status (0 indicates failure, 1 indicates success)."
         },
-        "constituent_list": {
+        "component_list": {
             "type": "array",
             "description": "The list of words and phrases that make up a sentence, and their translations in the current context.",
             "items": {
                 "type": "object",
                 "properties": {
-                    "constituent": {
+                    "component": {
                         "type": "string",
                         "description": "The words and phrases that make up a sentence"
                     },
-                    "word_class": {
-                        "type": "string",
-                        "description": "Part of speech of the current constituent within the context of the sentence being translated."
+                    "start": {
+                        "type": "integer",
+                        "description": "The starting index of component in the source sentence"
+                    },
+                    "end": {
+                        "type": "integer",
+                        "description": "The end index of component in the source sentence"
+                    },
+                    "component_with_lemmatize": {
+                      "type": "string",
+                      "description": "Tense or quantity restoration of words/phrases. E.G. 1) cars -> car 2) took away -> take away"
                     },
                     "translation": {
                         "type": "string",
-                        "description": "The translation of current constituent within the context of the sentence being translated."
+                        "description": "The translation of current component within the context of the sentence being translated."
+                    },
+                    "word_class": {
+                        "enum": ["n.", "adj.", "v.", "adv.", "num.", "pron.", "art.", "prep.", "conj.", "int."],
+                        "description": "Part of speech of the current component within the context of the sentence being translated."
+                    },
+                    "type": {
+                      "enum": ["word", "phrases"],
+                      "description": "Type of component attribute"
                     }
                 }
             }
@@ -221,11 +237,15 @@ final class TranslationService {
 }
 """
 //        举个例子：get up 拆分为 get 和 up时无法表达意思，所以拆分结果为 get up，其余情况都赢拆分为
+//        If a phrase cannot accurately express its meaning after being further broken down into words, then the phrase will appear in the breakdown results.
+//        and a sentence already translated into the target language (Translated sentence)
+//        Each component's translation should correspond one-to-one with the translated sentence.
+//        Translated sentence: \(translatedTrimmed)\n
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a sentence to be translated (Source sentence) and a sentence already translated into the target language (Translated sentence). 4) Analyze each component of the Source sentence and translate them, while also providing their parts of speech. Each component's translation should correspond one-to-one with the translated sentence. 5) The analysis results of the source sentence should include phrases and words. If a phrase cannot accurately express its meaning after being further broken down into words, then the phrase will appear in the breakdown results. 6) Ensure that the structured content in the output are consistent with the target language."),
-                .init(role: "user", content: "Source sentence: \(normalized)\nTranslated sentence: \(translatedTrimmed)\nProvide constituent translations in the target language only.")
+                .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a sentence to be translated (Source sentence). 4) Analyze each component of the Source sentence and translate them, while also providing their parts of speech.  5) The analysis results of the source sentence should include phrases and words. Words are prioritized over phrases in the splitting process; when a word cannot be correctly translated, the phrase is used as the result. 6) Set the start and end indices of the components in the source sentence in the `start` and `end` attributes. 7) If the component is a verb, the tense needs to be restored; if the component is a noun, the plural needs to be restored to the singular. The restored string is set in the `component_with_lemmatize` attribute. 8) Ensure that the structured content in the output are consistent with the target language."),
+                .init(role: "user", content: "Source sentence: \(normalized)\nProvide component translations in the target language only.")
             ],
             temperature: 0,
             responseFormat: .init(type: "json_object")
@@ -264,11 +284,11 @@ final class TranslationService {
             }
             let parsed = try JSONDecoder().decode(AnalyzeResponse.self, from: jsonData)
 
-            guard parsed.state == 1, let list = parsed.constituentList, list.isEmpty == false else {
+            guard parsed.state == 1, let list = parsed.componentList, list.isEmpty == false else {
                 throw TranslationError.analyzeFailed("解析失败")
             }
 
-            let constituents = list.map { SentenceAnalysis.Constituent(text: $0.constituent, translation: $0.translation, wordClass: $0.wordClass) }
+            let constituents = list.map { SentenceAnalysis.Constituent(text: $0.component, translation: $0.translation, wordClass: $0.wordClass) }
             return SentenceAnalysis(state: parsed.state, constituents: constituents)
         } catch let error as TranslationError {
             throw error
@@ -409,24 +429,24 @@ private struct StructuredTranslationResponse: Decodable {
 
 private struct AnalyzeResponse: Decodable {
     struct AnalyzeItem: Decodable {
-        let constituent: String
+        let component: String
         let wordClass: String
         let translation: String
 
         enum CodingKeys: String, CodingKey {
-            case constituent
+            case component
             case wordClass = "word_class"
             case translation
         }
     }
 
     let state: Int
-    let constituentList: [AnalyzeItem]?
+    let componentList: [AnalyzeItem]?
     let errorMessage: String?
 
     enum CodingKeys: String, CodingKey {
         case state
-        case constituentList = "constituent_list"
+        case componentList = "component_list"
         case errorMessage = "error_message"
     }
 }
