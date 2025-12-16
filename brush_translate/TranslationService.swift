@@ -22,9 +22,9 @@ struct TranslationResult {
 
 struct SentenceAnalysis {
     let state: Int
-    let constituents: [Constituent]
+    let components: [Component]
 
-    struct Constituent: Hashable {
+    struct Component: Hashable {
         let text: String
         let translation: String
         let wordClass: String
@@ -101,7 +101,7 @@ final class TranslationService {
 }
 """
 
-//        6) If the text to be translated is a sentence, analyze the sentence, extract each component of the sentence, translate them, and add them to the constant_list (Phrases have higher priority than words; if the constituent parts can form a phrase, the phrase is returned first)
+//        6) If the text to be translated is a sentence, analyze the sentence, extract each component of the sentence, translate them, and add them to the constant_list (Phrases have higher priority than words; if the component parts can form a phrase, the phrase is returned first)
 
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
@@ -245,7 +245,7 @@ final class TranslationService {
             model: "deepseek-chat",
             messages: [
                 .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a sentence to be translated (Source sentence). 4) Analyze each component of the Source sentence and translate them, while also providing their parts of speech.  5) The analysis results of the source sentence should include phrases and words. Words are prioritized over phrases in the splitting process; when a word cannot be correctly translated, the phrase is used as the result. 6) Set the start and end indices of the components in the source sentence in the `start` and `end` attributes. 7) If the component is a verb, the tense needs to be restored; if the component is a noun, the plural needs to be restored to the singular. The restored string is set in the `component_with_lemmatize` attribute. 8) Ensure that the structured content in the output are consistent with the target language."),
-                .init(role: "user", content: "Source sentence: \(normalized)\nProvide component translations in the target language only.")
+                .init(role: "user", content: "Source sentence: \(normalized)\n")
             ],
             temperature: 0,
             responseFormat: .init(type: "json_object")
@@ -288,8 +288,8 @@ final class TranslationService {
                 throw TranslationError.analyzeFailed("解析失败")
             }
 
-            let constituents = list.map { SentenceAnalysis.Constituent(text: $0.component, translation: $0.translation, wordClass: $0.wordClass) }
-            return SentenceAnalysis(state: parsed.state, constituents: constituents)
+            let components = list.map { SentenceAnalysis.Component(text: $0.component, translation: $0.translation, wordClass: $0.wordClass) }
+            return SentenceAnalysis(state: parsed.state, components: components)
         } catch let error as TranslationError {
             throw error
         } catch {
