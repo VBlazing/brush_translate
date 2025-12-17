@@ -397,6 +397,8 @@ private struct SentenceSegmentView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(theme.translateText.opacity(backgroundOpacity))
             )
+            .animation(.easeInOut(duration: 0.2), value: isHovering)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
             .contentShape(Rectangle())
             .allowsHitTesting(isInteractive)
             .onHover { hovering in
@@ -420,7 +422,6 @@ private struct SelectedComponentsView: View {
             .sorted { $0.start < $1.start }
             .filter { selectedIDs.contains($0.id) }
     }
-//    I am a teacher
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -447,9 +448,11 @@ private struct SelectedComponentsView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(theme.translateText.opacity(0.08))
                 )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
+        .animation(.easeInOut(duration: 0.3), value: selectedIDs)
     }
 
     private func tagView(title: String) -> some View {
@@ -479,6 +482,7 @@ private struct SelectedComponentsView: View {
     }
 }
 
+//I am a teacher
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()

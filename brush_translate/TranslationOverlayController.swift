@@ -134,15 +134,22 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             let previousFrame = panel.frame
 
             panel.backgroundColor = theme.panelBackgroundColor
-            panel.contentView = NSHostingView(rootView: view)
+            if let hosting = panel.contentView as? NSHostingView<AnyView> {
+                hosting.rootView = view
+            } else {
+                panel.contentView = NSHostingView(rootView: view)
+            }
 
             if let hosting = panel.contentView as? NSHostingView<AnyView> {
                 let size = hosting.fittingSize
                 if wasVisible {
-                    let oldCenter = NSPoint(x: previousFrame.midX, y: previousFrame.midY)
+                    let oldMidX = previousFrame.midX
+                    let oldTopY = previousFrame.maxY
                     var newFrame = previousFrame
                     newFrame.size = size
-                    newFrame.origin = NSPoint(x: oldCenter.x - size.width / 2, y: oldCenter.y - size.height / 2)
+                    // Keep the card visually "pinned" in place when height changes:
+                    // preserve top edge and horizontal center, expand downwards.
+                    newFrame.origin = NSPoint(x: oldMidX - size.width / 2, y: oldTopY - size.height)
                     panel.setFrame(newFrame, display: true, animate: false)
                 } else {
                     panel.setContentSize(size)
@@ -179,11 +186,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
 
     func hide() {
         clearMonitor()
+        let panel = self.panel
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
-            self.panel?.animator().alphaValue = 0
-        } completionHandler: { [weak self] in
-            self?.panel?.orderOut(nil)
+            panel?.animator().alphaValue = 0
+        } completionHandler: {
+            panel?.orderOut(nil)
         }
     }
 

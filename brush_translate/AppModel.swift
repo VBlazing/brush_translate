@@ -220,15 +220,16 @@ final class AppModel: ObservableObject {
     }
 
     private func toggleComponent(_ id: SentenceComponentID) {
-        if selectedComponentIDs.contains(id) {
-            selectedComponentIDs.remove(id)
-        } else {
-            selectedComponentIDs.insert(id)
-        }
-
-        guard let translation = lastTranslation else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                if self.selectedComponentIDs.contains(id) {
+                    self.selectedComponentIDs.remove(id)
+                } else {
+                    self.selectedComponentIDs.insert(id)
+                }
+            }
+            guard let translation = self.lastTranslation else { return }
             self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
         }
     }
