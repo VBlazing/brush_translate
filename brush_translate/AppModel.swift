@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var lastTranslation: TranslationResult?
     private var lastAnalysis: SentenceAnalysis?
+    private var selectedComponentIDs = Set<SentenceComponentID>()
 
     init() {
         let storedSource = UserDefaults.standard.string(forKey: UserDefaultsKeys.sourceLanguage) ?? LanguageOption.auto.code
@@ -120,6 +121,7 @@ final class AppModel: ObservableObject {
                 self.statusMessage = "翻译完成"
                 self.lastTranslation = result
                 self.lastAnalysis = nil
+                self.selectedComponentIDs.removeAll()
                 self.overlay.showSuccess(
                     translation: result,
                     theme: self.theme,
@@ -156,12 +158,9 @@ final class AppModel: ObservableObject {
         guard let translation = lastTranslation, translation.form == .sentence else { return }
         Task {
             await MainActor.run {
-                self.overlay.showSuccess(
-                    translation: translation,
-                    theme: self.theme,
-                    isAnalyzing: true,
-                    onAnalyze: { [weak self] in self?.startAnalyze() }
-                )
+                self.lastAnalysis = nil
+                self.selectedComponentIDs.removeAll()
+                self.presentOverlaySuccess(translation: translation, isAnalyzing: true)
             }
 
             do {
@@ -174,44 +173,63 @@ final class AppModel: ObservableObject {
                 )
                 self.lastAnalysis = analysis
                 await MainActor.run {
-                    self.overlay.showSuccess(
+                    self.selectedComponentIDs.removeAll()
+                    self.presentOverlaySuccess(
                         translation: translation,
-                        theme: self.theme,
                         isAnalyzing: false,
-                        toast: ToastData(kind: .success, message: "解析成功"),
-                        onAnalyze: { [weak self] in self?.startAnalyze() }
+                        toast: ToastData(kind: .success, message: "解析成功")
                     )
                 }
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
-                    self.overlay.showSuccess(
-                        translation: translation,
-                        theme: self.theme,
-                        isAnalyzing: false,
-                        onAnalyze: { [weak self] in self?.startAnalyze() }
-                    )
+                    self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
                 }
             } catch {
                 let message = (error as? TranslationError)?.localizedDescription ?? "解析失败"
                 await MainActor.run {
-                    self.overlay.showSuccess(
+                    self.presentOverlaySuccess(
                         translation: translation,
-                        theme: self.theme,
                         isAnalyzing: false,
-                        toast: ToastData(kind: .failure, message: message),
-                        onAnalyze: { [weak self] in self?.startAnalyze() }
+                        toast: ToastData(kind: .failure, message: message)
                     )
                 }
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
-                    self.overlay.showSuccess(
-                        translation: translation,
-                        theme: self.theme,
-                        isAnalyzing: false,
-                        onAnalyze: { [weak self] in self?.startAnalyze() }
-                    )
+                    self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func presentOverlaySuccess(translation: TranslationResult, isAnalyzing: Bool, toast: ToastData? = nil) {
+        overlay.showSuccess(
+            translation: translation,
+            analysis: lastAnalysis,
+            selectedComponentIDs: selectedComponentIDs,
+            theme: theme,
+            isAnalyzing: isAnalyzing,
+            toast: toast,
+            onAnalyze: { [weak self] in
+                self?.startAnalyze()
+            },
+            onToggleComponent: { [weak self] id in
+                self?.toggleComponent(id)
+            }
+        )
+    }
+
+    private func toggleComponent(_ id: SentenceComponentID) {
+        if selectedComponentIDs.contains(id) {
+            selectedComponentIDs.remove(id)
+        } else {
+            selectedComponentIDs.insert(id)
+        }
+
+        guard let translation = lastTranslation else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
         }
     }
 }

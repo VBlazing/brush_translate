@@ -117,15 +117,11 @@ struct TranslationCardView: View {
                 toolbar
                     .padding(.bottom, 20)
                 VStack() {
-                    Text(data.sourceText.isEmpty ? "未获取到选中文本" : data.sourceText)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(theme.sourceText)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .multilineTextAlignment(.leading)
-                        .lineSpacing(6)
+                    sourceSection
                         .padding(.bottom, 25)
                     VStack {
                         translationSection
+                        selectedComponentsSection
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
@@ -149,6 +145,55 @@ struct TranslationCardView: View {
         }
         .onHover { hovering in
             onHoverChange(hovering)
+        }
+    }
+
+    @ViewBuilder
+    private var sourceSection: some View {
+        if data.sourceText.isEmpty {
+            Text("未获取到选中文本")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(theme.sourceText)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(6)
+        } else if data.status == .success,
+                  data.form == .sentence,
+                  let analysis = data.analysis,
+                  let segments = SentenceSegmentation.segments(sourceText: data.sourceText, components: analysis.components) {
+            FlowLayout(spacing: 0) {
+                ForEach(segments) { segment in
+                    SentenceSegmentView(
+                        segment: segment,
+                        theme: theme,
+                        selectedIDs: data.selectedComponentIDs,
+                        onToggle: data.onToggleComponent
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(data.sourceText)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(theme.sourceText)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(6)
+        }
+    }
+
+    @ViewBuilder
+    private var selectedComponentsSection: some View {
+        if data.status == .success,
+           data.form == .sentence,
+           let analysis = data.analysis,
+           !data.selectedComponentIDs.isEmpty {
+            SelectedComponentsView(
+                analysis: analysis,
+                selectedIDs: data.selectedComponentIDs,
+                theme: theme
+            )
+            .padding(.top, 14)
         }
     }
 
@@ -319,9 +364,121 @@ struct TranslationCardView: View {
     }
 }
 
-#Preview {
-    ContentView()
-        .environmentObject(AppModel())
+private struct SentenceSegmentView: View {
+    let segment: SentenceRenderSegment
+    let theme: ThemeOption
+    let selectedIDs: Set<SentenceComponentID>
+    let onToggle: ((SentenceComponentID) -> Void)?
+
+    @State private var isHovering = false
+
+    private var componentID: SentenceComponentID? { segment.componentID }
+
+    private var isInteractive: Bool { componentID != nil }
+
+    private var isSelected: Bool {
+        guard let componentID else { return false }
+        return selectedIDs.contains(componentID)
+    }
+
+    private var backgroundOpacity: Double {
+        if isSelected { return 0.22 }
+        if isHovering { return 0.12 }
+        return 0
+    }
+
+    var body: some View {
+        Text(segment.text)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundColor(theme.sourceText)
+            .padding(.vertical, 2)
+            .padding(.horizontal, isInteractive ? 2 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(theme.translateText.opacity(backgroundOpacity))
+            )
+            .contentShape(Rectangle())
+            .allowsHitTesting(isInteractive)
+            .onHover { hovering in
+                guard isInteractive else { return }
+                isHovering = hovering
+            }
+            .onTapGesture {
+                guard let componentID else { return }
+                onToggle?(componentID)
+            }
+    }
+}
+
+private struct SelectedComponentsView: View {
+    let analysis: SentenceAnalysis
+    let selectedIDs: Set<SentenceComponentID>
+    let theme: ThemeOption
+
+    private var selectedComponents: [SentenceAnalysis.Component] {
+        analysis.components
+            .sorted { $0.start < $1.start }
+            .filter { selectedIDs.contains($0.id) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(selectedComponents, id: \.id) { component in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Text(component.text)
+                            .foregroundColor(theme.translateText)
+                            .font(.system(size: 16, weight: .semibold))
+                        tagView(title: posChineseName(for: component.wordClass))
+                    }
+                    Text(component.translation)
+                        .foregroundColor(theme.translateText.opacity(0.9))
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(theme.translateText.opacity(0.08))
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tagView(title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(theme.translateText.opacity(0.12))
+            .foregroundColor(theme.translateText)
+            .clipShape(Capsule())
+    }
+
+    private func posChineseName(for wordClass: String) -> String {
+        switch wordClass.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "n.": return "名词"
+        case "v.": return "动词"
+        case "adj.": return "形容词"
+        case "adv.": return "副词"
+        case "num.": return "数词"
+        case "pron.": return "代词"
+        case "art.": return "冠词"
+        case "prep.": return "介词"
+        case "conj.": return "连词"
+        case "int.": return "感叹词"
+        default: return wordClass.isEmpty ? "词性" : wordClass
+        }
+    }
+}
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+            .environmentObject(AppModel())
+    }
 }
 
 struct TranslationCardData {
@@ -336,11 +493,14 @@ struct TranslationCardData {
     let translatedText: String
     let form: TranslationForm?
     let wordParts: [WordPart]
+    let analysis: SentenceAnalysis?
+    let selectedComponentIDs: Set<SentenceComponentID>
     let status: Status
     let onRetry: (() -> Void)?
     let onSpeak: (() -> Void)?
     let onSaveNote: (() -> Void)?
     let onAnalyze: (() -> Void)?
+    let onToggleComponent: ((SentenceComponentID) -> Void)?
     let showAnalyzeButton: Bool
     let isAnalyzing: Bool
     let toast: ToastData?

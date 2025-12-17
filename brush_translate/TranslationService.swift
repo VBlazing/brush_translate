@@ -28,6 +28,26 @@ struct SentenceAnalysis {
         let text: String
         let translation: String
         let wordClass: String
+        let start: Int
+        let end: Int
+        let lemmatized: String?
+        let type: ComponentType?
+    }
+}
+
+struct SentenceComponentID: Hashable, Sendable {
+    let start: Int
+    let end: Int
+}
+
+enum ComponentType: String, Decodable, Sendable {
+    case word
+    case phrases
+}
+
+extension SentenceAnalysis.Component {
+    var id: SentenceComponentID {
+        SentenceComponentID(start: start, end: end)
     }
 }
 
@@ -288,7 +308,17 @@ final class TranslationService {
                 throw TranslationError.analyzeFailed("解析失败")
             }
 
-            let components = list.map { SentenceAnalysis.Component(text: $0.component, translation: $0.translation, wordClass: $0.wordClass) }
+            let components = list.map {
+                SentenceAnalysis.Component(
+                    text: $0.component,
+                    translation: $0.translation,
+                    wordClass: $0.wordClass,
+                    start: $0.start,
+                    end: $0.end,
+                    lemmatized: $0.componentWithLemmatize,
+                    type: $0.type
+                )
+            }
             return SentenceAnalysis(state: parsed.state, components: components)
         } catch let error as TranslationError {
             throw error
@@ -432,11 +462,19 @@ private struct AnalyzeResponse: Decodable {
         let component: String
         let wordClass: String
         let translation: String
+        let start: Int
+        let end: Int
+        let componentWithLemmatize: String?
+        let type: ComponentType?
 
         enum CodingKeys: String, CodingKey {
             case component
             case wordClass = "word_class"
             case translation
+            case start
+            case end
+            case componentWithLemmatize = "component_with_lemmatize"
+            case type
         }
     }
 

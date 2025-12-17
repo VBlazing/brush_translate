@@ -8,6 +8,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
@@ -15,17 +16,29 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var trackingArea: NSTrackingArea?
     private var eventMonitor: Any?
 
-    func showSuccess(translation: TranslationResult, theme: ThemeOption, isAnalyzing: Bool = false, toast: ToastData? = nil, onAnalyze: (() -> Void)? = nil) {
+    func showSuccess(
+        translation: TranslationResult,
+        analysis: SentenceAnalysis? = nil,
+        selectedComponentIDs: Set<SentenceComponentID>? = nil,
+        theme: ThemeOption,
+        isAnalyzing: Bool = false,
+        toast: ToastData? = nil,
+        onAnalyze: (() -> Void)? = nil,
+        onToggleComponent: ((SentenceComponentID) -> Void)? = nil
+    ) {
         let data = TranslationCardData(
             sourceText: translation.originalText,
             translatedText: translation.translatedText,
             form: translation.form,
             wordParts: translation.wordParts,
+            analysis: analysis,
+            selectedComponentIDs: selectedComponentIDs ?? [],
             status: .success,
             onRetry: nil,
             onSpeak: { [weak self] in self?.speak(text: translation.originalText) },
             onSaveNote: { [weak self] in self?.saveNote(source: translation.originalText, translated: translation.translatedText) },
             onAnalyze: onAnalyze,
+            onToggleComponent: onToggleComponent,
             showAnalyzeButton: translation.form == .sentence,
             isAnalyzing: isAnalyzing,
             toast: toast
@@ -41,11 +54,14 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             translatedText: "",
             form: nil,
             wordParts: [],
+            analysis: nil,
+            selectedComponentIDs: [],
             status: .placeholder,
             onRetry: nil,
             onSpeak: nil,
             onSaveNote: nil,
             onAnalyze: nil,
+            onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
             toast: nil
@@ -61,11 +77,14 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             translatedText: "",
             form: nil,
             wordParts: [],
+            analysis: nil,
+            selectedComponentIDs: [],
             status: .loading,
             onRetry: nil,
             onSpeak: nil,
             onSaveNote: nil,
             onAnalyze: nil,
+            onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
             toast: nil
@@ -81,11 +100,14 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             translatedText: message,
             form: nil,
             wordParts: [],
+            analysis: nil,
+            selectedComponentIDs: [],
             status: .failure,
             onRetry: retry,
             onSpeak: { [weak self] in self?.speak(text: sourceText) },
             onSaveNote: nil,
             onAnalyze: nil,
+            onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
             toast: nil
