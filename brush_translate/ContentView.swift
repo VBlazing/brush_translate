@@ -171,7 +171,7 @@ struct TranslationCardView: View {
                     )
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         } else {
             Text(data.sourceText)
                 .font(.system(size: 20, weight: .semibold))
@@ -235,7 +235,7 @@ struct TranslationCardView: View {
                 if data.isAnalyzing {
                     ProgressView()
                         .tint(theme.translateText)
-                        .scaleEffect(0.7)
+                        .scaleEffect(0.5)
                         .frame(width: 28, height: 28)
                 } else {
                     Button(action: { onAnalyze?() }) {
@@ -391,8 +391,8 @@ private struct SentenceSegmentView: View {
         Text(segment.text)
             .font(.system(size: 20, weight: .semibold))
             .foregroundColor(theme.sourceText)
-            .padding(.vertical, 2)
-            .padding(.horizontal, isInteractive ? 2 : 0)
+            .padding(.vertical, 3)
+            .padding(.horizontal, isInteractive ? 6 : 0)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(theme.translateText.opacity(backgroundOpacity))
@@ -420,22 +420,27 @@ private struct SelectedComponentsView: View {
             .sorted { $0.start < $1.start }
             .filter { selectedIDs.contains($0.id) }
     }
+//    I am a teacher
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(selectedComponents, id: \.id) { component in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 10) {
-                        Text(component.text)
-                            .foregroundColor(theme.translateText)
-                            .font(.system(size: 16, weight: .semibold))
+                    Text(component.text)
+                        .foregroundColor(theme.translateText)
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 2)
+
+                    HStack(alignment: .center, spacing: 10) {
                         tagView(title: posChineseName(for: component.wordClass))
+                        Text(component.translation)
+                            .foregroundColor(theme.translateText.opacity(0.9))
+                            .font(.system(size: 15, weight: .medium))
                     }
-                    Text(component.translation)
-                        .foregroundColor(theme.translateText.opacity(0.9))
-                        .font(.system(size: 15, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: 300, alignment: .center)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(
@@ -444,7 +449,7 @@ private struct SelectedComponentsView: View {
                 )
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func tagView(title: String) -> some View {

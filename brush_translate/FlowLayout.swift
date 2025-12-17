@@ -39,27 +39,51 @@ struct FlowLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
         let maxWidth = bounds.width
-        var currentX: CGFloat = bounds.minX
-        var currentY: CGFloat = bounds.minY
-        var lineHeight: CGFloat = 0
+        let sizeProposal = ProposedViewSize(width: maxWidth, height: nil)
 
-        for subview in subviews {
-            let sizeProposal = ProposedViewSize(width: maxWidth, height: nil)
+        struct Line {
+            var items: [(LayoutSubview, CGSize)] = []
+            var width: CGFloat = 0
+            var height: CGFloat = 0
+        }
+
+        var lines: [Line] = []
+        var currentLine = Line()
+
+        for (index, subview) in subviews.enumerated() {
             let size = subview.sizeThatFits(sizeProposal)
+            let itemWidth = size.width + ((index == 0 || currentLine.items.isEmpty) ? 0 : spacing)
 
-            if currentX > bounds.minX, currentX + size.width > bounds.minX + maxWidth {
-                currentX = bounds.minX
-                currentY += lineHeight
-                lineHeight = 0
+            if !currentLine.items.isEmpty, currentLine.width + itemWidth > maxWidth {
+                lines.append(currentLine)
+                currentLine = Line()
             }
 
-            subview.place(
-                at: CGPoint(x: currentX, y: currentY),
-                proposal: sizeProposal
-            )
+            let addSpacing = currentLine.items.isEmpty ? 0 : spacing
+            currentLine.items.append((subview, size))
+            currentLine.width += size.width + addSpacing
+            currentLine.height = max(currentLine.height, size.height)
+        }
 
-            currentX += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
+        if !currentLine.items.isEmpty {
+            lines.append(currentLine)
+        }
+
+        var currentY: CGFloat = bounds.minY
+        for line in lines {
+            var currentX = bounds.minX + max(0, (maxWidth - line.width) / 2)
+            for (index, item) in line.items.enumerated() {
+                let (subview, size) = item
+                if index > 0 {
+                    currentX += spacing
+                }
+                subview.place(
+                    at: CGPoint(x: currentX, y: currentY),
+                    proposal: ProposedViewSize(width: size.width, height: size.height)
+                )
+                currentX += size.width
+            }
+            currentY += line.height
         }
     }
 }
