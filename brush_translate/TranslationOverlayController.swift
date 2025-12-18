@@ -16,6 +16,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var isHovering = false
     private var trackingArea: NSTrackingArea?
     var onDidHide: (() -> Void)?
+    private let baseCollectionBehavior: NSWindow.CollectionBehavior = [.fullScreenAuxiliary, .ignoresCycle]
 
     var isVisible: Bool {
         panel?.isVisible == true
@@ -169,9 +170,11 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             self.ensureCloseGestureInstalled()
 
             if !wasVisible {
+                self.preparePanelForPresentation()
                 self.repositionPanelToMouseCenter()
                 panel.makeKeyAndOrderFront(nil)
                 panel.orderFrontRegardless()
+                self.lockPanelToCurrentSpace()
                 panel.alphaValue = 0
                 self.isHovering = false
 
@@ -230,13 +233,19 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
-        // - When visible: keep the card in its current Space/screen (don't follow the active Space).
-        // - When reopened from another Space: show it in the current Space (avoid Space switching).
-        panel.collectionBehavior = [.fullScreenAuxiliary, .ignoresCycle, .moveToActiveSpace]
+        panel.collectionBehavior = baseCollectionBehavior.union(.stationary)
         panel.ignoresMouseEvents = false
         panel.delegate = self
 
         self.panel = panel
+    }
+
+    private func preparePanelForPresentation() {
+        panel?.collectionBehavior = baseCollectionBehavior.union(.moveToActiveSpace)
+    }
+
+    private func lockPanelToCurrentSpace() {
+        panel?.collectionBehavior = baseCollectionBehavior.union(.stationary)
     }
 
     private func ensureCloseGestureInstalled() {
