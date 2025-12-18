@@ -22,6 +22,8 @@ final class AppModel: ObservableObject {
     private var lastTranslation: TranslationResult?
     private var lastAnalysis: SentenceAnalysis?
     private var selectedComponentIDs = Set<SentenceComponentID>()
+    private var activeTranslationToken: UUID?
+    private var activeAnalysisToken: UUID?
 
     init() {
         let storedSource = UserDefaults.standard.string(forKey: UserDefaultsKeys.sourceLanguage) ?? LanguageOption.auto.code
@@ -57,6 +59,14 @@ final class AppModel: ObservableObject {
                 UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.deepseekAPIKey)
             }
             .store(in: &cancellables)
+
+        overlay.onDidHide = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.activeTranslationToken = nil
+                self.activeAnalysisToken = nil
+            }
+        }
 
         HotKeyManager.shared.register { [weak self] in
             self?.triggerTranslationFromSelection()
@@ -104,7 +114,10 @@ final class AppModel: ObservableObject {
             return
         }
 
+        let token = UUID()
         await MainActor.run {
+            self.activeTranslationToken = token
+            self.activeAnalysisToken = nil
             self.statusMessage = "正在翻译..."
             self.overlay.showLoading(sourceText: trimmed, theme: self.theme)
         }
@@ -118,6 +131,7 @@ final class AppModel: ObservableObject {
             )
 
             await MainActor.run {
+                guard self.activeTranslationToken == token else { return }
                 self.statusMessage = "翻译完成"
                 self.lastTranslation = result
                 self.lastAnalysis = nil
@@ -138,6 +152,7 @@ final class AppModel: ObservableObject {
                 failureMessage = "翻译失败"
             }
             await MainActor.run {
+                guard self.activeTranslationToken == token else { return }
                 self.statusMessage = "翻译失败：\(failureMessage)"
                 self.overlay.showFailure(
                     sourceText: trimmed,
@@ -156,8 +171,10 @@ final class AppModel: ObservableObject {
 
     private func startAnalyze() {
         guard let translation = lastTranslation, translation.form == .sentence else { return }
+        let token = UUID()
         Task {
             await MainActor.run {
+                self.activeAnalysisToken = token
                 self.lastAnalysis = nil
                 self.selectedComponentIDs.removeAll()
                 self.presentOverlaySuccess(translation: translation, isAnalyzing: true)
@@ -171,8 +188,9 @@ final class AppModel: ObservableObject {
                     sourceLanguage: sourceLanguage,
                     targetLanguage: targetLanguage
                 )
-                self.lastAnalysis = analysis
                 await MainActor.run {
+                    guard self.activeAnalysisToken == token else { return }
+                    self.lastAnalysis = analysis
                     self.selectedComponentIDs.removeAll()
                     self.presentOverlaySuccess(
                         translation: translation,
@@ -182,11 +200,13 @@ final class AppModel: ObservableObject {
                 }
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
+                    guard self.activeAnalysisToken == token else { return }
                     self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
                 }
             } catch {
                 let message = (error as? TranslationError)?.localizedDescription ?? "解析失败"
                 await MainActor.run {
+                    guard self.activeAnalysisToken == token else { return }
                     self.presentOverlaySuccess(
                         translation: translation,
                         isAnalyzing: false,
@@ -195,6 +215,7 @@ final class AppModel: ObservableObject {
                 }
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
+                    guard self.activeAnalysisToken == token else { return }
                     self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
                 }
             }

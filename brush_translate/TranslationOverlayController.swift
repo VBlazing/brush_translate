@@ -15,7 +15,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var dismissTask: Task<Void, Never>?
     private var isHovering = false
     private var trackingArea: NSTrackingArea?
-    private var eventMonitor: Any?
+    var onDidHide: (() -> Void)?
 
     func showSuccess(
         translation: TranslationResult,
@@ -162,7 +162,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
                 }
             }
 
-            self.addClickAwayRecognizer()
+            self.ensureCloseGestureInstalled()
 
             if !wasVisible {
                 self.repositionPanelToMouseCenter()
@@ -191,7 +191,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     }
 
     func hide() {
-        clearMonitor()
+        onDidHide?()
         let panel = self.panel
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
@@ -219,73 +219,40 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         panel.titlebarAppearsTransparent = true
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
+        panel.hidesOnDeactivate = false
+        // - When visible: keep the card in its current Space/screen (don't follow the active Space).
+        // - When reopened from another Space: show it in the current Space (avoid Space switching).
+        panel.collectionBehavior = [.fullScreenAuxiliary, .ignoresCycle, .moveToActiveSpace]
         panel.ignoresMouseEvents = false
         panel.delegate = self
 
         self.panel = panel
     }
 
-    private func addClickAwayRecognizer() {
-        guard let panel else { return }
+    private func ensureCloseGestureInstalled() {
+        guard let panel, let contentView = panel.contentView else { return }
+
         panel.acceptsMouseMovedEvents = true
         panel.level = .screenSaver
 
-        let clickRecognizer = NSClickGestureRecognizer(target: self, action: #selector(handleClickOutside(_:)))
-        clickRecognizer.buttonMask = 0x1 // left click
-        clickRecognizer.numberOfClicksRequired = 1
-        clickRecognizer.delaysPrimaryMouseButtonEvents = false
-        panel.contentView?.addGestureRecognizer(clickRecognizer)
+        let alreadyInstalled = contentView.gestureRecognizers.contains { recognizer in
+            guard let click = recognizer as? NSClickGestureRecognizer else { return false }
+            return click.numberOfClicksRequired == 2 && click.buttonMask == 0x1
+        }
+        if alreadyInstalled { return }
 
         let doubleClick = NSClickGestureRecognizer(target: self, action: #selector(handleDoubleClick(_:)))
         doubleClick.numberOfClicksRequired = 2
         doubleClick.buttonMask = 0x1
-        panel.contentView?.addGestureRecognizer(doubleClick)
-
-        // Track clicks outside the panel (add only once)
-        if eventMonitor == nil {
-            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
-                guard let self, let panel = self.panel else { return event }
-                // Convert click to panel content coordinates to decide outside/inside
-                let screenPoint: NSPoint
-                if let win = event.window {
-                    screenPoint = win.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
-                } else {
-                    screenPoint = event.locationInWindow
-                }
-                let panelPoint = panel.convertPoint(fromScreen: screenPoint)
-                if let contentView = panel.contentView {
-                    let localPoint = contentView.convert(panelPoint, from: nil)
-                    if !contentView.bounds.contains(localPoint) {
-                        self.hide()
-                        return nil
-                    }
-                } else {
-                    self.hide()
-                    return nil
-                }
-                return event
-            }
-        }
-    }
-
-    @objc private func handleClickOutside(_ sender: NSGestureRecognizer) {
-        // gesture handled in local monitor
+        contentView.addGestureRecognizer(doubleClick)
     }
 
     @objc private func handleDoubleClick(_ sender: NSGestureRecognizer) {
         hide()
     }
 
-    private func clearMonitor() {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
-        }
-    }
-
     func windowDidResignKey(_ notification: Notification) {
-        hide()
+        // Keep the card visible; it should only be dismissed by double-click.
     }
 
     private func repositionPanelToMouseCenter() {
