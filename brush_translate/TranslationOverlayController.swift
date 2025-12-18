@@ -17,6 +17,10 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     private var trackingArea: NSTrackingArea?
     var onDidHide: (() -> Void)?
 
+    var isVisible: Bool {
+        panel?.isVisible == true
+    }
+
     func showSuccess(
         translation: TranslationResult,
         analysis: SentenceAnalysis? = nil,
@@ -199,6 +203,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         } completionHandler: {
             panel?.orderOut(nil)
         }
+    }
+
+    func hideImmediately() {
+        onDidHide?()
+        panel?.alphaValue = 0
+        panel?.orderOut(nil)
     }
 
     private func ensurePanel() {

@@ -85,6 +85,9 @@ final class AppModel: ObservableObject {
     func triggerTranslationFromSelection() {
         Task {
             await MainActor.run {
+                if self.overlay.isVisible {
+                    self.overlay.hideImmediately()
+                }
                 self.statusMessage = "正在读取选区..."
             }
 
