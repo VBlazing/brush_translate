@@ -26,15 +26,5 @@ struct brush_translateApp: App {
                 NSApp.terminate(nil)
             }
         }
-
-        WindowGroup("刷词翻译设置") {
-            ContentView()
-                .environmentObject(model)
-        }
-
-        Settings {
-            ContentView()
-                .environmentObject(model)
-        }
     }
 }

@@ -8,18 +8,16 @@
 import AppKit
 import SwiftUI
 
-final class SettingsWindowController: NSObject, NSWindowDelegate {
+final class SettingsWindowController: NSObject {
     static let shared = SettingsWindowController()
 
     private var window: NSWindow?
-    private weak var model: AppModel?
 
     private override init() {
         super.init()
     }
 
     func show(with model: AppModel) {
-        self.model = model
         if window == nil {
             let content = ContentView().environmentObject(model)
             let window = NSWindow(
@@ -30,17 +28,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             )
             window.title = "刷词翻译设置"
             window.isReleasedWhenClosed = false
+            window.collectionBehavior = [.moveToActiveSpace]
             window.contentView = NSHostingView(rootView: content)
             window.center()
-            window.delegate = self
             self.window = window
         }
 
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        model?.enterAccessoryMode()
     }
 }

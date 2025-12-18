@@ -74,12 +74,7 @@ final class AppModel: ObservableObject {
     }
 
     func openSettings() {
-        NSApp.setActivationPolicy(.regular)
         SettingsWindowController.shared.show(with: self)
-    }
-
-    func enterAccessoryMode() {
-        NSApp.setActivationPolicy(.accessory)
     }
 
     func triggerTranslationFromSelection() {
