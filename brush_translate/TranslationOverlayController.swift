@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import QuartzCore
 
 @MainActor
 final class TranslationOverlayController: NSObject, NSWindowDelegate {
@@ -132,6 +133,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             guard let panel = self.panel else { return }
             let wasVisible = panel.isVisible
             let previousFrame = panel.frame
+            let resizeAnimationDuration: TimeInterval = 0.28
 
             panel.backgroundColor = theme.panelBackgroundColor
             if let hosting = panel.contentView as? NSHostingView<AnyView> {
@@ -150,7 +152,11 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
                     // Keep the card visually "pinned" in place when height changes:
                     // preserve top edge and horizontal center, expand downwards.
                     newFrame.origin = NSPoint(x: oldMidX - size.width / 2, y: oldTopY - size.height)
-                    panel.setFrame(newFrame, display: true, animate: false)
+                    NSAnimationContext.runAnimationGroup { context in
+                        context.duration = resizeAnimationDuration
+                        context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                        panel.animator().setFrame(newFrame, display: true)
+                    }
                 } else {
                     panel.setContentSize(size)
                 }

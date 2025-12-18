@@ -448,7 +448,12 @@ private struct SelectedComponentsView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(theme.translateText.opacity(0.08))
                 )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .opacity
+                    )
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
