@@ -26,7 +26,7 @@ struct ContentView: View {
                 }
             }
             .padding(24)
-            .frame(minWidth: 720, minHeight: 520)
+            .frame(minWidth: 620, minHeight: 520)
         }
     }
 
@@ -39,8 +39,8 @@ struct ContentView: View {
                     }
                 }
                 .labelsHidden()
-                .controlSize(.large)
-                .frame(maxWidth: 320)
+                .controlSize(.regular)
+                .frame(alignment: .trailing)
             }
 
             SettingField(theme: theme, title: "译文语言", caption: "翻译的目标语言") {
@@ -50,8 +50,8 @@ struct ContentView: View {
                     }
                 }
                 .labelsHidden()
-                .controlSize(.large)
-                .frame(maxWidth: 320)
+                .controlSize(.regular)
+                .frame(alignment: .trailing)
             }
 
             if model.sourceLanguage == model.targetLanguage {
@@ -73,7 +73,7 @@ struct ContentView: View {
 
     private var featureSection: some View {
         SettingSection(theme: theme, title: "功能", subtitle: nil) {
-            SettingField(theme: theme, title: "翻译快捷键", caption: "触发翻译的快捷键，选中文字后触发翻译，结果显示于屏幕中央。") {
+            SettingField(theme: theme, title: "翻译快捷键", caption: "选中文字后触发翻译，弹出卡片显示内容") {
                 HStack(spacing: 10) {
                     ShortcutPill(keys: ["⌥", "T"], theme: theme)
                 }
@@ -91,6 +91,7 @@ struct ContentView: View {
                         }
                         .textFieldStyle(.roundedBorder)
                         .padding(.vertical, 2)
+                        .frame(maxWidth: 200)
 
                         Button(action: { revealAPIKey.toggle() }) {
                             Image(systemName: revealAPIKey ? "eye.slash" : "eye")
@@ -129,7 +130,7 @@ struct ContentView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 320)
+                .frame(alignment: .trailing)
             }
         }
     }
