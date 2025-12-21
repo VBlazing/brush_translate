@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var isEditingShortcut = false
     @State private var pendingHotKey: HotKeyDefinition?
     @State private var keyCaptureMonitor = KeyCaptureMonitor()
+    @State private var saveButtonFrame: CGRect = .zero
 
     private var theme: ThemeOption { model.theme }
 
@@ -34,8 +35,21 @@ struct ContentView: View {
         }
         .environment(\.colorScheme, theme == .night ? .dark : .light)
         .onDisappear {
-            keyCaptureMonitor.stop()
+            cancelShortcutEditing()
         }
+        .coordinateSpace(name: "settingsRoot")
+        .onPreferenceChange(SaveButtonFrameKey.self) { frame in
+            saveButtonFrame = frame
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { value in
+                    guard isEditingShortcut else { return }
+                    if !saveButtonFrame.contains(value.location) {
+                        cancelShortcutEditing()
+                    }
+                }
+        )
     }
 
     private var translationSection: some View {
@@ -83,16 +97,26 @@ struct ContentView: View {
         SettingSection(theme: theme, title: "功能", subtitle: nil) {
             SettingField(theme: theme, title: "翻译快捷键", caption: "选中文字后触发翻译，弹出卡片显示内容") {
                 HStack(spacing: 10) {
-                    if isEditingShortcut {
-                        Text("按下新的快捷键")
-                            .font(.footnote)
-                            .foregroundColor(theme.translateText)
-                    }
                     Spacer()
                     HStack(spacing: 8) {
                         ShortcutPill(keys: currentHotKeyKeys, theme: theme)
-                        Button(action: handleShortcutAction) {
-                            Text(isEditingShortcut ? "保存" : "修改")
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Button(action: handleShortcutAction) {
+                                Text(isEditingShortcut ? "保存" : "修改")
+                            }
+                            .background(
+                                GeometryReader { proxy in
+                                    Color.clear.preference(
+                                        key: SaveButtonFrameKey.self,
+                                        value: proxy.frame(in: .named("settingsRoot"))
+                                    )
+                                }
+                            )
+                            if isEditingShortcut {
+                                Text("按下新的快捷键")
+                                    .font(.footnote)
+                                    .foregroundColor(theme.translateText)
+                            }
                         }
                         .buttonStyle(.bordered)
                         .disabled(isEditingShortcut && pendingHotKey == nil)
@@ -178,9 +202,7 @@ struct ContentView: View {
         keyCaptureMonitor.start { event in
             if event.keyCode == 53 {
                 DispatchQueue.main.async {
-                    self.pendingHotKey = nil
-                    self.isEditingShortcut = false
-                    self.keyCaptureMonitor.stop()
+                    self.cancelShortcutEditing()
                 }
                 return true
             }
@@ -190,6 +212,12 @@ struct ContentView: View {
             }
             return true
         }
+    }
+
+    private func cancelShortcutEditing() {
+        pendingHotKey = nil
+        isEditingShortcut = false
+        keyCaptureMonitor.stop()
     }
 }
 
@@ -324,6 +352,14 @@ private final class KeyCaptureMonitor {
 
     deinit {
         stop()
+    }
+}
+
+private struct SaveButtonFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
 
