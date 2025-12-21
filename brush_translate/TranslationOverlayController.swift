@@ -141,6 +141,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             let resizeAnimationDuration: TimeInterval = 0.28
 
             panel.backgroundColor = theme.panelBackgroundColor
+            panel.appearance = NSAppearance(named: theme == .night ? .darkAqua : .aqua)
             if let hosting = panel.contentView as? NSHostingView<AnyView> {
                 hosting.rootView = view
             } else {
@@ -232,6 +233,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         panel.backgroundColor = .clear
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
+        panel.titlebarSeparatorStyle = .none
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
