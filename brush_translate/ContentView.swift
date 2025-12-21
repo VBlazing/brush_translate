@@ -5,11 +5,15 @@
 //  Created by 赵泽宇 on 2025/11/26.
 //
 
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var revealAPIKey = false
+    @State private var isEditingShortcut = false
+    @State private var pendingHotKey: HotKeyDefinition?
+    @State private var keyCaptureMonitor = KeyCaptureMonitor()
 
     private var theme: ThemeOption { model.theme }
 
@@ -29,6 +33,9 @@ struct ContentView: View {
             .frame(minWidth: 720, minHeight: 560)
         }
         .environment(\.colorScheme, theme == .night ? .dark : .light)
+        .onDisappear {
+            keyCaptureMonitor.stop()
+        }
     }
 
     private var translationSection: some View {
@@ -76,7 +83,20 @@ struct ContentView: View {
         SettingSection(theme: theme, title: "功能", subtitle: nil) {
             SettingField(theme: theme, title: "翻译快捷键", caption: "选中文字后触发翻译，弹出卡片显示内容") {
                 HStack(spacing: 10) {
-                    ShortcutPill(keys: ["⌥", "T"], theme: theme)
+                    if isEditingShortcut {
+                        Text("按下新的快捷键")
+                            .font(.footnote)
+                            .foregroundColor(theme.translateText)
+                    }
+                    Spacer()
+                    HStack(spacing: 8) {
+                        ShortcutPill(keys: currentHotKeyKeys, theme: theme)
+                        Button(action: handleShortcutAction) {
+                            Text(isEditingShortcut ? "保存" : "修改")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isEditingShortcut && pendingHotKey == nil)
+                    }
                 }
             }
 
@@ -136,6 +156,39 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .formFieldBackground(theme)
             }
+        }
+    }
+
+    private var currentHotKeyKeys: [String] {
+        (pendingHotKey ?? model.hotKeyDefinition).displayKeys
+    }
+
+    private func handleShortcutAction() {
+        if isEditingShortcut {
+            guard let pendingHotKey else { return }
+            model.hotKeyDefinition = pendingHotKey
+            self.pendingHotKey = nil
+            isEditingShortcut = false
+            keyCaptureMonitor.stop()
+            return
+        }
+
+        isEditingShortcut = true
+        pendingHotKey = nil
+        keyCaptureMonitor.start { event in
+            if event.keyCode == 53 {
+                DispatchQueue.main.async {
+                    self.pendingHotKey = nil
+                    self.isEditingShortcut = false
+                    self.keyCaptureMonitor.stop()
+                }
+                return true
+            }
+            guard let hotKey = HotKeyDefinition.from(event: event) else { return true }
+            DispatchQueue.main.async {
+                self.pendingHotKey = hotKey
+            }
+            return true
         }
     }
 }
@@ -246,6 +299,31 @@ private struct ShortcutPill: View {
                         .stroke(theme.divider, lineWidth: 1)
                 )
         )
+    }
+}
+
+private final class KeyCaptureMonitor {
+    private var monitor: Any?
+
+    func start(handler: @escaping (NSEvent) -> Bool) {
+        stop()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if handler(event) {
+                return nil
+            }
+            return event
+        }
+    }
+
+    func stop() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        monitor = nil
+    }
+
+    deinit {
+        stop()
     }
 }
 

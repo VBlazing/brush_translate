@@ -15,6 +15,7 @@ final class AppModel: ObservableObject {
     @Published var statusMessage: String = "等待选中文本..."
     @Published var theme: ThemeOption
     @Published var deepseekAPIKey: String
+    @Published var hotKeyDefinition: HotKeyDefinition
 
     private let translator = TranslationService()
     private let overlay = TranslationOverlayController()
@@ -30,11 +31,21 @@ final class AppModel: ObservableObject {
         let storedTarget = UserDefaults.standard.string(forKey: UserDefaultsKeys.targetLanguage) ?? LanguageOption.simplifiedChinese.code
         let storedTheme = UserDefaults.standard.string(forKey: UserDefaultsKeys.theme) ?? ThemeOption.night.rawValue
         let storedAPIKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.deepseekAPIKey) ?? ""
+        let storedHotKeyCode = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyCode) as? Int
+        let storedHotKeyModifiers = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyModifiers) as? Int
 
         sourceLanguage = LanguageOption(rawValue: storedSource) ?? .auto
         targetLanguage = LanguageOption(rawValue: storedTarget) ?? .simplifiedChinese
         theme = ThemeOption(rawValue: storedTheme) ?? .night
         deepseekAPIKey = storedAPIKey
+        if let storedHotKeyCode, let storedHotKeyModifiers {
+            hotKeyDefinition = HotKeyDefinition(
+                keyCode: UInt32(storedHotKeyCode),
+                modifiers: UInt32(storedHotKeyModifiers)
+            )
+        } else {
+            hotKeyDefinition = .default
+        }
 
         $sourceLanguage
             .sink { value in
@@ -60,6 +71,14 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $hotKeyDefinition
+            .sink { value in
+                UserDefaults.standard.setValue(Int(value.keyCode), forKey: UserDefaultsKeys.hotKeyCode)
+                UserDefaults.standard.setValue(Int(value.modifiers), forKey: UserDefaultsKeys.hotKeyModifiers)
+                HotKeyManager.shared.updateHotKey(keyCode: value.keyCode, modifiers: value.modifiers)
+            }
+            .store(in: &cancellables)
+
         overlay.onDidHide = { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -71,6 +90,10 @@ final class AppModel: ObservableObject {
         HotKeyManager.shared.register { [weak self] in
             self?.triggerTranslationFromSelection()
         }
+        HotKeyManager.shared.updateHotKey(
+            keyCode: hotKeyDefinition.keyCode,
+            modifiers: hotKeyDefinition.modifiers
+        )
     }
 
     func openSettings() {
@@ -259,6 +282,8 @@ enum UserDefaultsKeys {
     static let targetLanguage = "brush_translate.target"
     static let theme = "brush_translate.theme"
     static let deepseekAPIKey = "brush_translate.deepseek.apiKey"
+    static let hotKeyCode = "brush_translate.hotkey.code"
+    static let hotKeyModifiers = "brush_translate.hotkey.modifiers"
 }
 
 enum LanguageOption: String, CaseIterable, Identifiable {
