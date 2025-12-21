@@ -9,93 +9,289 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var revealAPIKey = false
+
+    private var theme: ThemeOption { model.theme }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            header
-            form
-            footer
-        }
-        .padding(24)
-        .frame(minWidth: 480)
-    }
+        ZStack {
+            theme.background
+                .ignoresSafeArea()
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("刷词翻译设置")
-                .font(.title2)
-                .bold()
-            Text("菜单栏常驻 · 全局快捷键 Option + T")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            ScrollView {
+                VStack(spacing: 14) {
+                    translationSection
+                    featureSection
+                    themeSection
+                }
+            }
+            .padding(24)
+            .frame(minWidth: 720, minHeight: 520)
         }
     }
 
-    private var form: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
+    private var translationSection: some View {
+        SettingSection(theme: theme, title: "翻译", subtitle: nil) {
+            SettingField(theme: theme, title: "原文语言", caption: "待翻译语种") {
                 Picker("源语言", selection: $model.sourceLanguage) {
                     ForEach(LanguageOption.allCases) { option in
                         Text(option.displayName).tag(option)
                     }
                 }
-                .frame(maxWidth: .infinity)
+                .labelsHidden()
+                .controlSize(.large)
+                .frame(maxWidth: 320)
+            }
 
+            SettingField(theme: theme, title: "译文语言", caption: "翻译的目标语言") {
                 Picker("目标语言", selection: $model.targetLanguage) {
                     ForEach(LanguageOption.allCases.filter { $0 != .auto }) { option in
                         Text(option.displayName).tag(option)
                     }
                 }
-                .frame(maxWidth: .infinity)
+                .labelsHidden()
+                .controlSize(.large)
+                .frame(maxWidth: 320)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label("快捷键：Option + T", systemImage: "keyboard")
-                    .font(.subheadline)
-                Text("选中文字或句子，按快捷键直接获取选区并触发翻译，结果会在屏幕中央显示。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            }
-
-            Picker("主题", selection: $model.theme) {
-                ForEach(ThemeOption.allCases) { option in
-                    Text(option.displayName).tag(option)
+            if model.sourceLanguage == model.targetLanguage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundColor(Color.orange)
+                    Text("源语言与目标语言相同，可能导致翻译无变化。")
+                        .foregroundColor(theme.translateText)
+                        .font(.footnote)
                 }
-            }
-            .pickerStyle(.segmented)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Deepseek API Key")
-                    .font(.subheadline)
-                SecureField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
-                    .textFieldStyle(.roundedBorder)
-                Text("必须配置后才能调用大模型翻译，密钥仅保存在本机。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            }
-
-            HStack(spacing: 12) {
-                Button(action: model.triggerTranslationFromSelection) {
-                    Label("翻译当前选区", systemImage: "play.fill")
-                }
-                Button(action: model.openSettings) {
-                    Label("在菜单栏找到应用图标以快速访问", systemImage: "menubar.rectangle")
-                }
-                .buttonStyle(.borderless)
-                .foregroundColor(.secondary)
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(theme.divider.opacity(0.4))
+                )
             }
         }
     }
 
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("状态：\(model.statusMessage)")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-            Text("如需展示释义，请在系统偏好设置中为本应用开启辅助功能权限，用以获取选中文本。")
-                .font(.footnote)
-                .foregroundColor(.secondary)
+    private var featureSection: some View {
+        SettingSection(theme: theme, title: "功能", subtitle: nil) {
+            SettingField(theme: theme, title: "翻译快捷键", caption: "触发翻译的快捷键，选中文字后触发翻译，结果显示于屏幕中央。") {
+                HStack(spacing: 10) {
+                    ShortcutPill(keys: ["⌥", "T"], theme: theme)
+                }
+            }
+
+            SettingField(theme: theme, title: "Deepseek API Key", caption: "用于调用大模型翻译，仅保存在本机") {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Group {
+                            if revealAPIKey {
+                                TextField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
+                            } else {
+                                SecureField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
+                            }
+                        }
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.vertical, 2)
+
+                        Button(action: { revealAPIKey.toggle() }) {
+                            Image(systemName: revealAPIKey ? "eye.slash" : "eye")
+                                .foregroundColor(theme.translateText)
+                        }
+                        .buttonStyle(.plain)
+                        .help(revealAPIKey ? "隐藏密钥" : "显示密钥")
+                    }
+
+                    HStack(spacing: 8) {
+                        if model.deepseekAPIKey.isEmpty {
+                            Image(systemName: "lock.slash")
+                                .foregroundColor(Color.orange)
+                            Text("未配置密钥，翻译将无法调用大模型接口。")
+                                .foregroundColor(theme.translateText)
+                        } else {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(Color.green)
+                            Text("已保存到本机，仅用于翻译调用。")
+                                .foregroundColor(theme.translateText)
+                        }
+                    }
+                    .font(.footnote)
+                }
+            }
         }
+    }
+
+    private var themeSection: some View {
+        SettingSection(theme: theme, title: "样式", subtitle: nil) {
+            SettingField(theme: theme, title: "主题配置", caption: nil) {
+                Picker("主题", selection: $model.theme) {
+                    ForEach(ThemeOption.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320)
+            }
+        }
+    }
+}
+
+private struct SettingSection<Content: View>: View {
+    let theme: ThemeOption
+    let title: String
+    let subtitle: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(theme.sourceText)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(theme.translateText)
+                }
+            }
+            Divider()
+                .background(theme.divider)
+            content
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(theme.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(theme.divider, lineWidth: 1)
+                )
+                .shadow(color: theme.shadow.opacity(0.16), radius: 22, y: 12)
+        )
+    }
+}
+
+private struct SettingField<Content: View>: View {
+    let theme: ThemeOption
+    let title: String
+    let caption: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(theme.sourceText)
+                if let caption {
+                    Text(caption)
+                        .font(.footnote)
+                        .foregroundColor(theme.translateText)
+                }
+            }
+            Spacer()
+            content
+        }
+    }
+}
+
+private struct ShortcutPill: View {
+    let keys: [String]
+    let theme: ThemeOption
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(keys, id: \.self) { key in
+                Text(key)
+                    .font(.callout.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(theme.background)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(theme.divider, lineWidth: 1)
+                    )
+                    .foregroundColor(theme.sourceText)
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(theme.cardBackground.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(theme.divider, lineWidth: 1)
+                )
+        )
+    }
+}
+
+private struct ThemeChoiceRow: View {
+    let option: ThemeOption
+    let isSelected: Bool
+    let theme: ThemeOption
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                ThemePreview(option: option)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(option.displayName)
+                        .foregroundColor(theme.sourceText)
+                        .font(.subheadline.weight(.semibold))
+                    Text(option == .night ? "暗色背景配合柔和的翻译卡片" : "浅色背景配合纯净卡片")
+                        .foregroundColor(theme.translateText)
+                        .font(.footnote)
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(Color.green)
+                }
+            }
+            .padding(10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isSelected ? theme.divider.opacity(0.4) : Color.clear)
+        )
+    }
+}
+
+private struct ThemePreview: View {
+    let option: ThemeOption
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(option.background)
+            .overlay(
+                VStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(option.cardBackground)
+                        .frame(width: 46, height: 16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(option.divider, lineWidth: 1)
+                        )
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(option.cardBackground.opacity(0.9))
+                        .frame(width: 46, height: 10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(option.divider.opacity(0.8), lineWidth: 0.8)
+                        )
+                }
+            )
+            .frame(width: 64, height: 52)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(option.sourceText.opacity(0.15), lineWidth: 1)
+            )
     }
 }
 
