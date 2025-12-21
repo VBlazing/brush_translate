@@ -178,7 +178,9 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
                 panel.alphaValue = 0
                 self.isHovering = false
 
-                NSApp.activate(ignoringOtherApps: true)
+                if !SettingsWindowController.shared.isVisible {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.1
                     panel.animator().alphaValue = 1
