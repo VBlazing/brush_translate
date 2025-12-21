@@ -82,7 +82,7 @@ struct HotKeyDefinition: Equatable {
     let keyCode: UInt32
     let modifiers: UInt32
 
-    static let `default` = HotKeyDefinition(keyCode: 17, modifiers: UInt32(optionKey))
+    static let `default` = HotKeyDefinition(keyCode: 12, modifiers: UInt32(optionKey))
 
     var displayKeys: [String] {
         var keys: [String] = []
