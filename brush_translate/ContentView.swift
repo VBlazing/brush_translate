@@ -26,8 +26,9 @@ struct ContentView: View {
                 }
             }
             .padding(24)
-            .frame(minWidth: 620, minHeight: 520)
+            .frame(minWidth: 720, minHeight: 560)
         }
+        .environment(\.colorScheme, theme == .night ? .dark : .light)
     }
 
     private var translationSection: some View {
@@ -40,7 +41,7 @@ struct ContentView: View {
                 }
                 .labelsHidden()
                 .controlSize(.regular)
-                .frame(alignment: .trailing)
+                .formFieldBackground(theme)
             }
 
             SettingField(theme: theme, title: "译文语言", caption: "翻译的目标语言") {
@@ -51,7 +52,7 @@ struct ContentView: View {
                 }
                 .labelsHidden()
                 .controlSize(.regular)
-                .frame(alignment: .trailing)
+                .formFieldBackground(theme)
             }
 
             if model.sourceLanguage == model.targetLanguage {
@@ -85,13 +86,16 @@ struct ContentView: View {
                         Group {
                             if revealAPIKey {
                                 TextField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
+                                    .textFieldStyle(.plain)
                             } else {
                                 SecureField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
+                                    .textFieldStyle(.plain)
                             }
                         }
-                        .textFieldStyle(.roundedBorder)
+                        .foregroundColor(theme.sourceText)
                         .padding(.vertical, 2)
                         .frame(maxWidth: 200)
+                        .formFieldBackground(theme)
 
                         Button(action: { revealAPIKey.toggle() }) {
                             Image(systemName: revealAPIKey ? "eye.slash" : "eye")
@@ -130,7 +134,7 @@ struct ContentView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
-                .frame(alignment: .trailing)
+                .formFieldBackground(theme)
             }
         }
     }
@@ -192,6 +196,22 @@ private struct SettingField<Content: View>: View {
             Spacer()
             content
         }
+    }
+}
+
+private extension View {
+    func formFieldBackground(_ theme: ThemeOption) -> some View {
+        self
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(theme.background)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(theme.divider, lineWidth: 1)
+                    )
+            )
     }
 }
 
