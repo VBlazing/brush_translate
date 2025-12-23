@@ -452,6 +452,7 @@ struct TranslationCardView: View {
                         .padding(.bottom, 25)
                     VStack {
                         translationSection
+                        wordPartsSection
                         selectedComponentsSection
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -489,7 +490,7 @@ struct TranslationCardView: View {
                 .multilineTextAlignment(.leading)
                 .lineSpacing(6)
         } else if data.status == .success,
-                  data.form == .sentence,
+                  data.analysisType == .sentence,
                   let analysis = data.analysis,
                   let segments = SentenceSegmentation.segments(sourceText: data.sourceText, components: analysis.components) {
             FlowLayout(spacing: 0) {
@@ -516,7 +517,7 @@ struct TranslationCardView: View {
     @ViewBuilder
     private var selectedComponentsSection: some View {
         if data.status == .success,
-           data.form == .sentence,
+           data.analysisType == .sentence,
            let analysis = data.analysis,
            !data.selectedComponentIDs.isEmpty {
             SelectedComponentsView(
@@ -611,27 +612,12 @@ struct TranslationCardView: View {
             .font(.system(size: 18, weight: .medium))
             .frame(maxWidth: .infinity, alignment: .center)
         case .success:
-            if data.form == .word {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(wordLines(from: data), id: \.self) { line in
-                        HStack(alignment: .center, spacing: 10) {
-                            tagView(title: line.tag)
-                            Text(line.text)
-                                .foregroundColor(theme.translateText)
-                                .font(.system(size: 16, weight: .semibold))
-                                .frame(alignment: .center)
-                        }
-                    }
-                }
-                .frame(alignment: .center)
-            } else {
-                Text(data.translatedText.isEmpty ? "无翻译" : data.translatedText)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(theme.translateText)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing(6)
-            }
+            Text(data.translatedText.isEmpty ? "无翻译" : data.translatedText)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(theme.translateText)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(6)
         case .failure:
             VStack(spacing: 12) {
                 Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
@@ -664,34 +650,31 @@ struct TranslationCardView: View {
         let text: String
     }
 
-    private func parseWordLines(_ content: String) -> [WordLine] {
-        content
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .map { line in
-                if let range = line.range(of: ":") ?? line.range(of: "：") {
-                    let tag = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
-                    let text = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
-                    return WordLine(line: line, tag: tag.isEmpty ? "词性" : tag, text: text.isEmpty ? line : text)
+    @ViewBuilder
+    private var wordPartsSection: some View {
+        if data.status == .success,
+           data.analysisType == .word,
+           data.wordParts.isEmpty == false {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(wordLines(from: data.wordParts), id: \.self) { line in
+                    HStack(alignment: .center, spacing: 10) {
+                        tagView(title: line.tag)
+                        Text(line.text)
+                            .foregroundColor(theme.translateText)
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(alignment: .center)
+                    }
                 }
-                let parts = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-                if let first = parts.first, parts.count > 1 {
-                    let tag = String(first)
-                    let text = String(parts[1]).trimmingCharacters(in: .whitespaces)
-                    return WordLine(line: line, tag: tag, text: text.isEmpty ? line : text)
-                }
-                return WordLine(line: line, tag: "词性", text: line)
             }
+            .frame(alignment: .center)
+            .padding(.top, 18)
+        }
     }
 
-    private func wordLines(from data: TranslationCardData) -> [WordLine] {
-        if !data.wordParts.isEmpty {
-            return data.wordParts.map { part in
-                WordLine(line: "\(part.wordClass) \(part.content)", tag: part.wordClass, text: part.content)
-            }
+    private func wordLines(from parts: [WordPart]) -> [WordLine] {
+        parts.map { part in
+            WordLine(line: "\(part.wordClass) \(part.content)", tag: part.wordClass, text: part.content)
         }
-        return parseWordLines(data.translatedText)
     }
 }
 
@@ -836,7 +819,7 @@ struct TranslationCardData {
 
     let sourceText: String
     let translatedText: String
-    let form: TranslationForm?
+    let analysisType: AnalysisTextType?
     let wordParts: [WordPart]
     let analysis: SentenceAnalysis?
     let selectedComponentIDs: Set<SentenceComponentID>

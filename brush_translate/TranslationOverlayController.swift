@@ -25,6 +25,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
     func showSuccess(
         translation: TranslationResult,
         analysis: SentenceAnalysis? = nil,
+        analysisType: AnalysisTextType? = nil,
+        wordParts: [WordPart] = [],
         selectedComponentIDs: Set<SentenceComponentID>? = nil,
         theme: ThemeOption,
         isAnalyzing: Bool = false,
@@ -35,8 +37,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: translation.originalText,
             translatedText: translation.translatedText,
-            form: translation.form,
-            wordParts: translation.wordParts,
+            analysisType: analysisType,
+            wordParts: wordParts,
             analysis: analysis,
             selectedComponentIDs: selectedComponentIDs ?? [],
             status: .success,
@@ -45,7 +47,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSaveNote: { [weak self] in self?.saveNote(source: translation.originalText, translated: translation.translatedText) },
             onAnalyze: onAnalyze,
             onToggleComponent: onToggleComponent,
-            showAnalyzeButton: translation.form == .sentence,
+            showAnalyzeButton: true,
             isAnalyzing: isAnalyzing,
             toast: toast
         )
@@ -58,7 +60,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: "",
             translatedText: "",
-            form: nil,
+            analysisType: nil,
             wordParts: [],
             analysis: nil,
             selectedComponentIDs: [],
@@ -81,7 +83,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: "",
-            form: nil,
+            analysisType: nil,
             wordParts: [],
             analysis: nil,
             selectedComponentIDs: [],
@@ -104,7 +106,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: message,
-            form: nil,
+            analysisType: nil,
             wordParts: [],
             analysis: nil,
             selectedComponentIDs: [],

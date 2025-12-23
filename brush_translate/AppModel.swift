@@ -22,6 +22,8 @@ final class AppModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var lastTranslation: TranslationResult?
     private var lastAnalysis: SentenceAnalysis?
+    private var lastAnalysisType: AnalysisTextType?
+    private var lastWordParts: [WordPart] = []
     private var selectedComponentIDs = Set<SentenceComponentID>()
     private var activeTranslationToken: UUID?
     private var activeAnalysisToken: UUID?
@@ -156,6 +158,8 @@ final class AppModel: ObservableObject {
                 self.statusMessage = "翻译完成"
                 self.lastTranslation = result
                 self.lastAnalysis = nil
+                self.lastAnalysisType = nil
+                self.lastWordParts = []
                 self.selectedComponentIDs.removeAll()
                 self.overlay.showSuccess(
                     translation: result,
@@ -191,12 +195,14 @@ final class AppModel: ObservableObject {
     }
 
     private func startAnalyze() {
-        guard let translation = lastTranslation, translation.form == .sentence else { return }
+        guard let translation = lastTranslation else { return }
         let token = UUID()
         Task {
             await MainActor.run {
                 self.activeAnalysisToken = token
                 self.lastAnalysis = nil
+                self.lastAnalysisType = nil
+                self.lastWordParts = []
                 self.selectedComponentIDs.removeAll()
                 self.presentOverlaySuccess(translation: translation, isAnalyzing: true)
             }
@@ -211,7 +217,9 @@ final class AppModel: ObservableObject {
                 )
                 await MainActor.run {
                     guard self.activeAnalysisToken == token else { return }
-                    self.lastAnalysis = analysis
+                    self.lastAnalysisType = analysis.type
+                    self.lastAnalysis = analysis.sentence
+                    self.lastWordParts = analysis.wordParts
                     self.selectedComponentIDs.removeAll()
                     self.presentOverlaySuccess(
                         translation: translation,
@@ -248,6 +256,8 @@ final class AppModel: ObservableObject {
         overlay.showSuccess(
             translation: translation,
             analysis: lastAnalysis,
+            analysisType: lastAnalysisType,
+            wordParts: lastWordParts,
             selectedComponentIDs: selectedComponentIDs,
             theme: theme,
             isAnalyzing: isAnalyzing,

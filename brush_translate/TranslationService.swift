@@ -13,11 +13,15 @@ import NaturalLanguage
 struct TranslationResult {
     let originalText: String
     let translatedText: String
-    let form: TranslationForm?
-    let wordParts: [WordPart]
     let alternatives: [String]
     let detectedSource: String
     let target: String
+}
+
+struct AnalysisResult {
+    let type: AnalysisTextType
+    let sentence: SentenceAnalysis?
+    let wordParts: [WordPart]
 }
 
 struct SentenceAnalysis {
@@ -87,35 +91,8 @@ final class TranslationService {
             "description": "Translation error message (only present when state is 0, the value is null when state is 1)."
         },
         "translate_result": {
-            "type": "object",
-            "description": "Translation result object (only present when state is 1, the value is null when state is 0).",
-            "properties": {
-                "form": {
-                    "enum": ["word", "sentence"],
-                    "description": "The format of the content to be translated"
-                },
-                "content": {
-                    "type": "string",
-                    "description": "The translation results of the sentence (only present when form is sentence, the value is null when form is word)."
-                },
-                "content_with_parts_of_speech": {
-                    "type": "array",
-                    "description": "Word translation with part-of-speech tagging: Each element corresponds to a part-of-speech tag and the translation corresponding to that part of speech (only present when form is word, the value is null when form is sentence).",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "word_class": {
-                                "type": "string",
-                                "description": "Part of speech of the word to be translated"
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "The translation of the word of the current part of speech should include at least two translations separated by a semicolon."
-                            }
-                        }
-                    }
-                }
-            }
+            "type": "string",
+            "description": "Translation result (only present when state is 1, the value is null when state is 0)."
         }
     }
 }
@@ -126,7 +103,7 @@ final class TranslationService {
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source language: \(promptSource). 3) The user input format is 'Translate: text', which directly and accurately translates the text following 'Translate'. 4) Ensure that the structured content and error messages in the output are consistent with the target language. 5) If the text to be translated is words, provide all parts of speech for this word. 6) Please carefully check the output to ensure it is correct before returning the result. 7) Do not use word association; rely entirely on user input."),
+                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source language: \(promptSource). 3) The user input format is 'Translate: text', which directly and accurately translates the text following 'Translate'. 4) Ensure that the structured content and error messages in the output are consistent with the target language. 5) Please carefully check the output to ensure it is correct before returning the result. 6) Do not use word association; rely entirely on user input."),
                 .init(role: "user", content: "Translate: \(text)")
             ],
             temperature: 0,
@@ -155,39 +132,16 @@ final class TranslationService {
             let structured = try decodeStructured(content)
             switch structured.state {
             case 1:
-                guard let result = structured.translateResult else { throw TranslationError.invalidResponse }
+                guard let result = structured.translateResult?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      result.isEmpty == false else { throw TranslationError.invalidResponse }
                 let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
-
-                switch result.form {
-                case .sentence:
-                    guard let content = result.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
-                        throw TranslationError.invalidResponse
-                    }
-                    return TranslationResult(
-                        originalText: text,
-                        translatedText: content,
-                        form: result.form,
-                        wordParts: [],
-                        alternatives: [],
-                        detectedSource: guessedLanguage,
-                        target: target.displayName
-                    )
-                case .word:
-                    guard let parts = result.contentWithPartsOfSpeech, parts.isEmpty == false else {
-                        throw TranslationError.invalidResponse
-                    }
-                    let mapped = parts.map { WordPart(wordClass: $0.wordClass, content: $0.content) }
-                    let joined = mapped.map { "\($0.wordClass): \($0.content)" }.joined(separator: "\n")
-                    return TranslationResult(
-                        originalText: text,
-                        translatedText: joined,
-                        form: result.form,
-                        wordParts: mapped,
-                        alternatives: [],
-                        detectedSource: guessedLanguage,
-                        target: target.displayName
-                    )
-                }
+                return TranslationResult(
+                    originalText: text,
+                    translatedText: result,
+                    alternatives: [],
+                    detectedSource: guessedLanguage,
+                    target: target.displayName
+                )
             case 0:
                 throw TranslationError.serviceError(structured.errorMessage ?? "翻译失败")
             default:
@@ -200,10 +154,10 @@ final class TranslationService {
         }
     }
 
-    func analyze(text: String, translated: String, apiKey: String?, sourceLanguage: LanguageOption, targetLanguage: LanguageOption) async throws -> SentenceAnalysis {
+    func analyze(text: String, translated: String, apiKey: String?, sourceLanguage: LanguageOption, targetLanguage: LanguageOption) async throws -> AnalysisResult {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
-        let translatedTrimmed = translated.trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = translated.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
 
@@ -214,7 +168,11 @@ final class TranslationService {
     "properties": {
         "state": {
           "type": "integer",
-          "description": "Sentence parsing status (0 indicates failure, 1 indicates success)."
+          "description": "Parsing status (0 indicates failure, 1 indicates success)."
+        },
+        "text_type": {
+          "enum": ["word", "sentence"],
+          "description": "Whether the input text is a word or a sentence."
         },
         "component_list": {
             "type": "array",
@@ -252,6 +210,26 @@ final class TranslationService {
                     }
                 }
             }
+        },
+        "word_parts": {
+            "type": "array",
+            "description": "Word translation with part-of-speech tagging. Each part should include up to three translations.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "word_class": {
+                        "type": "string",
+                        "description": "Part of speech of the word to be translated"
+                    },
+                    "translations": {
+                        "type": "array",
+                        "description": "Up to three translations for the current part of speech.",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -264,8 +242,8 @@ final class TranslationService {
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a sentence analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a sentence to be translated (Source sentence). 4) Analyze each component of the Source sentence and translate them, while also providing their parts of speech.  5) The analysis results of the source sentence should include phrases and words. Words are prioritized over phrases in the splitting process; when a word cannot be correctly translated, the phrase is used as the result. 6) Set the start and end indices of the components in the source sentence in the `start` and `end` attributes. 7) If the component is a verb, the tense needs to be restored; if the component is a noun, the plural needs to be restored to the singular. The restored string is set in the `component_with_lemmatize` attribute. 8) Ensure that the structured content in the output are consistent with the target language."),
-                .init(role: "user", content: "Source sentence: \(normalized)\n")
+                .init(role: "system", content: "You are a text analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a text (Source text). 4) First determine whether the text is a word or a sentence, and set `text_type`. 5) If it is a sentence, analyze each component of the Source text and translate them, while also providing their parts of speech. The analysis results should include phrases and words. Words are prioritized over phrases in the splitting process; when a word cannot be correctly translated, the phrase is used as the result. 6) Set the start and end indices of the components in the source text in the `start` and `end` attributes. 7) If the component is a verb, the tense needs to be restored; if the component is a noun, the plural needs to be restored to the singular. The restored string is set in the `component_with_lemmatize` attribute. 8) If it is a word, return `word_parts` with each part-of-speech and up to three translations. 9) Ensure that the structured content in the output are consistent with the target language."),
+                .init(role: "user", content: "Source text: \(normalized)\n")
             ],
             temperature: 0,
             responseFormat: .init(type: "json_object")
@@ -304,22 +282,38 @@ final class TranslationService {
             }
             let parsed = try JSONDecoder().decode(AnalyzeResponse.self, from: jsonData)
 
-            guard parsed.state == 1, let list = parsed.componentList, list.isEmpty == false else {
+            guard parsed.state == 1, let textType = parsed.textType else {
                 throw TranslationError.analyzeFailed("解析失败")
             }
 
-            let components = list.map {
-                SentenceAnalysis.Component(
-                    text: $0.component,
-                    translation: $0.translation,
-                    wordClass: $0.wordClass,
-                    start: $0.start,
-                    end: $0.end,
-                    lemmatized: $0.componentWithLemmatize,
-                    type: $0.type
-                )
+            switch textType {
+            case .sentence:
+                guard let list = parsed.componentList, list.isEmpty == false else {
+                    throw TranslationError.analyzeFailed("解析失败")
+                }
+                let components = list.map {
+                    SentenceAnalysis.Component(
+                        text: $0.component,
+                        translation: $0.translation,
+                        wordClass: $0.wordClass,
+                        start: $0.start,
+                        end: $0.end,
+                        lemmatized: $0.componentWithLemmatize,
+                        type: $0.type
+                    )
+                }
+                let analysis = SentenceAnalysis(state: parsed.state, components: components)
+                return AnalysisResult(type: textType, sentence: analysis, wordParts: [])
+            case .word:
+                guard let parts = parsed.wordParts, parts.isEmpty == false else {
+                    throw TranslationError.analyzeFailed("解析失败")
+                }
+                let mapped = parts.map { part in
+                    let translations = part.translations.prefix(3)
+                    return WordPart(wordClass: part.wordClass, content: translations.joined(separator: "；"))
+                }
+                return AnalysisResult(type: textType, sentence: nil, wordParts: mapped)
             }
-            return SentenceAnalysis(state: parsed.state, components: components)
         } catch let error as TranslationError {
             throw error
         } catch {
@@ -424,31 +418,9 @@ private struct DeepseekResponse: Decodable {
 }
 
 private struct StructuredTranslationResponse: Decodable {
-    struct TranslateResult: Decodable {
-        let form: TranslationForm
-        let content: String?
-        let contentWithPartsOfSpeech: [WordPartResponse]?
-
-        enum CodingKeys: String, CodingKey {
-            case form
-            case content
-            case contentWithPartsOfSpeech = "content_with_parts_of_speech"
-        }
-    }
-
-    struct WordPartResponse: Decodable {
-        let wordClass: String
-        let content: String
-
-        enum CodingKeys: String, CodingKey {
-            case wordClass = "word_class"
-            case content
-        }
-    }
-
     let state: Int
     let errorMessage: String?
-    let translateResult: TranslateResult?
+    let translateResult: String?
 
     enum CodingKeys: String, CodingKey {
         case state
@@ -479,19 +451,33 @@ private struct AnalyzeResponse: Decodable {
     }
 
     let state: Int
+    let textType: AnalysisTextType?
     let componentList: [AnalyzeItem]?
+    let wordParts: [AnalyzeWordPart]?
     let errorMessage: String?
 
     enum CodingKeys: String, CodingKey {
         case state
+        case textType = "text_type"
         case componentList = "component_list"
+        case wordParts = "word_parts"
         case errorMessage = "error_message"
     }
 }
 
-enum TranslationForm: String, Decodable {
+enum AnalysisTextType: String, Decodable {
     case word
     case sentence
+}
+
+private struct AnalyzeWordPart: Decodable {
+    let wordClass: String
+    let translations: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case wordClass = "word_class"
+        case translations
+    }
 }
 
 struct WordPart: Hashable, Decodable {
