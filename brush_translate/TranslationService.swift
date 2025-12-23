@@ -65,6 +65,12 @@ enum TranslationError: Error {
 }
 
 final class TranslationService {
+    private let cache = NSCache<NSString, TranslationResultBox>()
+
+    init() {
+        cache.countLimit = 200
+    }
+
     func translate(text: String, from source: LanguageOption, to target: LanguageOption, apiKey: String?) async throws -> TranslationResult {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
@@ -73,6 +79,13 @@ final class TranslationService {
         if source != .auto, languageMatchesExpected(text: normalized, expected: source) == false {
             throw TranslationError.serviceError("语言不一致")
         }
+
+        let cacheKey = cacheKeyFor(text: normalized, source: source, target: target)
+        print("cacheKey", cacheKey)
+        if let cached = cache.object(forKey: cacheKey)?.value {
+            return cached
+        }
+
         return try await translateWithDeepseek(text: normalized, from: source, to: target, apiKey: trimmedKey)
     }
     private func translateWithDeepseek(text: String, from source: LanguageOption, to target: LanguageOption, apiKey: String) async throws -> TranslationResult {
@@ -88,8 +101,6 @@ final class TranslationService {
     }
 }
 """
-
-//        6) If the text to be translated is a sentence, analyze the sentence, extract each component of the sentence, translate them, and add them to the constant_list (Phrases have higher priority than words; if the component parts can form a phrase, the phrase is returned first)
 
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
@@ -133,13 +144,16 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
                 guard let result = structured.translateResult?.trimmingCharacters(in: .whitespacesAndNewlines),
                       result.isEmpty == false else { throw TranslationError.invalidResponse }
                 let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
-                return TranslationResult(
+                let translation = TranslationResult(
                     originalText: text,
                     translatedText: result,
                     alternatives: [],
                     detectedSource: guessedLanguage,
                     target: target.displayName
                 )
+                let cacheKey = cacheKeyFor(text: text, source: source, target: target)
+                cache.setObject(TranslationResultBox(value: translation), forKey: cacheKey)
+                return translation
             case 0:
                 throw TranslationError.serviceError(structured.errorMessage ?? "翻译失败")
             default:
@@ -366,6 +380,10 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
         return "未知语言"
     }
 
+    private func cacheKeyFor(text: String, source: LanguageOption, target: LanguageOption) -> NSString {
+        "\(source.code)|\(target.code)|\(text)" as NSString
+    }
+
     private func definitionsForWord(_ word: String) -> [String] {
         guard !word.contains(" ") else { return [] }
         let cfRange = CFRange(location: 0, length: word.utf16.count)
@@ -424,6 +442,14 @@ private struct StructuredTranslationResponse: Decodable {
         case state
         case errorMessage = "error_message"
         case translateResult = "translate_result"
+    }
+}
+
+private final class TranslationResultBox: NSObject {
+    let value: TranslationResult
+
+    init(value: TranslationResult) {
+        self.value = value
     }
 }
 
