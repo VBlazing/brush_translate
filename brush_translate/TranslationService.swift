@@ -82,18 +82,9 @@ final class TranslationService {
 {
     "type": "object",
     "properties": {
-        "state": {
-            "type": "integer",
-            "description": "Translation success or failure is indicated by a value of 1 (success) and 0 (failure)."
-        },
-        "error_message": {
-            "type": "string",
-            "description": "Translation error message (only present when state is 0, the value is null when state is 1)."
-        },
-        "translate_result": {
-            "type": "string",
-            "description": "Translation result (only present when state is 1, the value is null when state is 0)."
-        }
+        "state": { "type": "integer" },
+        "error_message": { "type": "string" },
+        "translate_result": { "type": "string" }
     }
 }
 """
@@ -103,7 +94,14 @@ final class TranslationService {
         let requestBody = DeepseekRequest(
             model: "deepseek-chat",
             messages: [
-                .init(role: "system", content: "You are a translation engine. Translate user-provided content. Always respond with pure JSON matching this schema (exact text, no changes): \n\(schema)\nRules: 1) Target language: \(target.displayName). 2) Source language: \(promptSource). 3) The user input format is 'Translate: text', which directly and accurately translates the text following 'Translate'. 4) Ensure that the structured content and error messages in the output are consistent with the target language. 5) Please carefully check the output to ensure it is correct before returning the result. 6) Do not use word association; rely entirely on user input."),
+                .init(
+                    role: "system",
+                    content: """
+You are a translation engine. Return pure JSON matching this schema (no markdown):
+\(schema)
+Rules: translate input after "Translate:" from \(promptSource) to \(target.displayName). If success, set state=1 and translate_result; if failure, state=0 and error_message. Keep output in target language.
+"""
+                ),
                 .init(role: "user", content: "Translate: \(text)")
             ],
             temperature: 0,
