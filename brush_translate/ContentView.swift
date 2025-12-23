@@ -644,6 +644,7 @@ struct TranslationCardView: View {
             .clipShape(Capsule())
     }
 
+
     private struct WordLine: Hashable {
         let line: String
         let tag: String
@@ -658,7 +659,7 @@ struct TranslationCardView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(wordLines(from: data.wordParts), id: \.self) { line in
                     HStack(alignment: .center, spacing: 10) {
-                        tagView(title: line.tag)
+                        tagView(title: posChineseName(for: line.tag))
                         Text(line.text)
                             .foregroundColor(theme.translateText)
                             .font(.system(size: 16, weight: .semibold))
@@ -784,20 +785,21 @@ private struct SelectedComponentsView: View {
             .clipShape(Capsule())
     }
 
-    private func posChineseName(for wordClass: String) -> String {
-        switch wordClass.trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "n.": return "名词"
-        case "v.": return "动词"
-        case "adj.": return "形容词"
-        case "adv.": return "副词"
-        case "num.": return "数词"
-        case "pron.": return "代词"
-        case "art.": return "冠词"
-        case "prep.": return "介词"
-        case "conj.": return "连词"
-        case "int.": return "感叹词"
-        default: return wordClass.isEmpty ? "词性" : wordClass
-        }
+}
+
+private func posChineseName(for wordClass: String) -> String {
+    switch wordClass.trimmingCharacters(in: .whitespacesAndNewlines) {
+    case "n.": return "名词"
+    case "v.": return "动词"
+    case "adj.": return "形容词"
+    case "adv.": return "副词"
+    case "num.": return "数词"
+    case "pron.": return "代词"
+    case "art.": return "冠词"
+    case "prep.": return "介词"
+    case "conj.": return "连词"
+    case "int.": return "感叹词"
+    default: return wordClass.isEmpty ? "词性" : wordClass
     }
 }
 

@@ -218,7 +218,7 @@ final class TranslationService {
                 "type": "object",
                 "properties": {
                     "word_class": {
-                        "type": "string",
+                        "enum": ["n.", "adj.", "v.", "adv.", "num.", "pron.", "art.", "prep.", "conj.", "int."],
                         "description": "Part of speech of the word to be translated"
                     },
                     "translations": {
