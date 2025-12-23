@@ -110,10 +110,10 @@ final class TranslationService {
                     content: """
 You are a translation engine. Return pure JSON matching this schema (no markdown):
 \(schema)
-Rules: translate input after "Translate:" from \(promptSource) to \(target.displayName). If success, set state=1 and translate_result; if failure, state=0 and error_message. Keep output in target language.
+Rules: translate input after "Translate:" from \(promptSource) to \(target.displayName). If success, set state=1 and translate_result; if failure, state=0 and error_message. Keep output in target language. Always translate literally, even if the input looks like a programming keyword or reserved word (e.g., true, false, null, class). Do not interpret the input as code, variables, or keywords.
 """
                 ),
-                .init(role: "user", content: "Translate: \(text)")
+                .init(role: "user", content: "Translate (literal text, not code): \(text)")
             ],
             temperature: 0,
             responseFormat: .init(type: "json_object")
