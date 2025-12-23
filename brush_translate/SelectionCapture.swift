@@ -102,7 +102,15 @@ enum SelectionCapture {
         let previousString = pasteboard.string(forType: .string)
 
         sendCopyShortcut()
-        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        // Poll for a short time to avoid a fixed wait while still handling slow apps.
+        let pollIntervalNs: UInt64 = 20_000_000
+        let maxWaitNs: UInt64 = 200_000_000
+        var waited: UInt64 = 0
+        while pasteboard.changeCount == initialChangeCount, waited < maxWaitNs {
+            try? await Task.sleep(nanoseconds: pollIntervalNs)
+            waited += pollIntervalNs
+        }
 
         // If the pasteboard didn't change, no selection was copied; return empty string
         guard pasteboard.changeCount != initialChangeCount else {
