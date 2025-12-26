@@ -17,6 +17,17 @@ struct ContentView: View {
     @State private var saveButtonFrame: CGRect = .zero
 
     private var theme: ThemeOption { model.theme }
+    private var themeBinding: Binding<ThemeOption> {
+        Binding(
+            get: { model.theme },
+            set: { newValue in
+                guard model.theme != newValue else { return }
+                DispatchQueue.main.async {
+                    model.theme = newValue
+                }
+            }
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -171,7 +182,7 @@ struct ContentView: View {
     private var themeSection: some View {
         SettingSection(theme: theme, title: "样式", subtitle: nil) {
             SettingField(theme: theme, title: "主题配置", caption: nil) {
-                Picker("主题", selection: $model.theme) {
+                Picker("主题", selection: themeBinding) {
                     ForEach(ThemeOption.allCases) { option in
                         Text(option.displayName).tag(option)
                     }
