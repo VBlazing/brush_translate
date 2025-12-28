@@ -452,6 +452,7 @@ struct TranslationCardView: View {
     @State private var hoverSpeak = false
     @State private var hoverNote = false
     @State private var hoverAnalyze = false
+    private let toolbarItemSize: CGFloat = 28
 
     var body: some View {
         ZStack {
@@ -553,6 +554,7 @@ struct TranslationCardView: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(theme.translateText.opacity(hoverSpeak ? 0.12 : 0))
             )
+            .frame(width: toolbarItemSize, height: toolbarItemSize)
             .foregroundColor(theme.translateText.opacity(data.sourceText.isEmpty ? 0.3 : 1))
             .scaleEffect(hoverSpeak ? 1.05 : 1.0)
             .animation(.easeInOut(duration: 0.12), value: hoverSpeak)
@@ -576,8 +578,8 @@ struct TranslationCardView: View {
 //            .disabled(data.sourceText.isEmpty)
             if data.showAnalyzeButton {
                 if data.isAnalyzing {
-                    LoadingIndicator(theme: theme, size: 16, lineWidth: 2)
-                        .frame(width: 28, height: 28)
+                    LoadingIndicator(theme: theme, size: 14, lineWidth: 2)
+                        .frame(width: toolbarItemSize, height: toolbarItemSize)
                 } else {
                     Button(action: { onAnalyze?() }) {
                         Image(systemName: "text.magnifyingglass")
@@ -589,6 +591,7 @@ struct TranslationCardView: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(theme.translateText.opacity(hoverAnalyze ? 0.12 : 0))
                     )
+                    .frame(width: toolbarItemSize, height: toolbarItemSize)
                     .foregroundColor(theme.translateText.opacity(data.sourceText.isEmpty ? 0.3 : 1))
                     .scaleEffect(hoverAnalyze ? 1.05 : 1.0)
                     .animation(.easeInOut(duration: 0.12), value: hoverAnalyze)
@@ -611,12 +614,13 @@ struct TranslationCardView: View {
                 .multilineTextAlignment(.leading)
                 .lineSpacing(6)
         case .loading:
-            HStack(spacing: 10) {
-                LoadingIndicator(theme: theme, size: 18, lineWidth: 2.2)
+            HStack(spacing: 8) {
+                LoadingIndicator(theme: theme, size: 16, lineWidth: 2)
                 Text("翻译中...")
                     .foregroundColor(theme.translateText)
             }
-            .font(.system(size: 18, weight: .medium))
+            .font(.system(size: 20, weight: .semibold))
+            .lineSpacing(6)
             .frame(maxWidth: .infinity, alignment: .center)
         case .success:
             Text(data.translatedText.isEmpty ? "无翻译" : data.translatedText)
