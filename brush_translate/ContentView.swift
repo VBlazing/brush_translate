@@ -576,9 +576,7 @@ struct TranslationCardView: View {
 //            .disabled(data.sourceText.isEmpty)
             if data.showAnalyzeButton {
                 if data.isAnalyzing {
-                    ProgressView()
-                        .tint(theme.translateText)
-                        .scaleEffect(0.5)
+                    LoadingIndicator(theme: theme, size: 16, lineWidth: 2)
                         .frame(width: 28, height: 28)
                 } else {
                     Button(action: { onAnalyze?() }) {
@@ -613,10 +611,8 @@ struct TranslationCardView: View {
                 .multilineTextAlignment(.leading)
                 .lineSpacing(6)
         case .loading:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .tint(theme.translateText)
-                    .scaleEffect(0.6)
+            HStack(spacing: 10) {
+                LoadingIndicator(theme: theme, size: 18, lineWidth: 2.2)
                 Text("翻译中...")
                     .foregroundColor(theme.translateText)
             }
@@ -874,5 +870,36 @@ struct ToastView: View {
                 .fill((toast.kind == .success ? theme.translateText : theme.errorText).opacity(0.12))
         )
         .foregroundColor(toast.kind == .success ? theme.translateText : theme.errorText)
+    }
+}
+
+private struct LoadingIndicator: View {
+    let theme: ThemeOption
+    let size: CGFloat
+    let lineWidth: CGFloat
+
+    @State private var rotation = Angle.degrees(0)
+
+    var body: some View {
+        Circle()
+            .stroke(
+                AngularGradient(
+                    gradient: Gradient(colors: [
+                        theme.translateText.opacity(0.1),
+                        theme.translateText.opacity(0.9),
+                        theme.translateText.opacity(0.1)
+                    ]),
+                    center: .center
+                ),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+            .frame(width: size, height: size)
+            .rotationEffect(rotation)
+            .onAppear {
+                rotation = .degrees(0)
+                withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
+                    rotation = .degrees(360)
+                }
+            }
     }
 }
