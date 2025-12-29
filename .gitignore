@@ -1,7 +1,7 @@
 /build
 brush_translate.xcodeproj
 
-/brush_translate/prompt
+# /brush_translate/prompt
 /AGENTS.md
 
 

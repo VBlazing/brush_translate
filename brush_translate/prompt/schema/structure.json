@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "integer",
+      "description": "Translation success or failure is indicated by a value of 1 (success) and 0 (failure)."
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Translation error message (only present when state is 0, the value is null when state is 1)."
+    },
+    "translate_result": {
+      "type": "string",
+      "description": "Translation result (only present when state is 1, the value is null when state is 0)."
+    }
+  }
+}

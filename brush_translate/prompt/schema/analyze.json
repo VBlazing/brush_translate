@@ -1,0 +1,70 @@
+{
+    "type": "object",
+    "properties": {
+        "state": {
+            "type": "integer",
+            "description": "Parsing status (0 indicates failure, 1 indicates success)."
+        },
+        "text_type": {
+            "enum": ["word", "sentence"],
+            "description": "Whether the input text is a word or a sentence."
+        },
+        "component_list": {
+            "type": "array",
+            "description": "The list of words and phrases that make up a sentence, and their translations in the current context.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "component": {
+                        "type": "string",
+                        "description": "The words and phrases that make up a sentence"
+                    },
+                    "start": {
+                        "type": "integer",
+                        "description": "The starting index of component in the source sentence"
+                    },
+                    "end": {
+                        "type": "integer",
+                        "description": "The end index of component in the source sentence"
+                    },
+                    "component_with_lemmatize": {
+                        "type": "string",
+                        "description": "Tense or quantity restoration of words/phrases. E.G. 1) cars -> car 2) took away -> take away"
+                    },
+                    "translation": {
+                        "type": "string",
+                        "description": "The translation of current component within the context of the sentence being translated."
+                    },
+                    "word_class": {
+                        "enum": ["n.", "adj.", "v.", "adv.", "num.", "pron.", "art.", "prep.", "conj.", "int."],
+                        "description": "Part of speech of the current component within the context of the sentence being translated."
+                    },
+                    "type": {
+                        "enum": ["word", "phrases"],
+                        "description": "Type of component attribute"
+                    }
+                }
+            }
+        },
+        "word_parts": {
+            "type": "array",
+            "description": "Word translation with part-of-speech tagging. Each part should include up to three translations.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "word_class": {
+                        "enum": ["n.", "adj.", "v.", "adv.", "num.", "pron.", "art.", "prep.", "conj.", "int."],
+                        "description": "Part of speech of the word to be translated. Must match component_list.word_class."
+                    },
+                    "translations": {
+                        "type": "array",
+                        "description": "Up to three translations for the current part of speech.",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
