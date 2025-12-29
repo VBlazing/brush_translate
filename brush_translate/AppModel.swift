@@ -171,10 +171,17 @@ final class AppModel: ObservableObject {
             }
         } catch {
             let failureMessage: String
+            let inlineToast: ToastData?
             if let translationError = error as? TranslationError {
                 failureMessage = translationError.localizedDescription
+                if case .serviceError = translationError {
+                    inlineToast = ToastData(kind: .failure, message: failureMessage)
+                } else {
+                    inlineToast = nil
+                }
             } else {
                 failureMessage = "翻译失败"
+                inlineToast = nil
             }
             await MainActor.run {
                 guard self.activeTranslationToken == token else { return }
@@ -183,6 +190,7 @@ final class AppModel: ObservableObject {
                     sourceText: trimmed,
                     message: failureMessage,
                     theme: self.theme,
+                    inlineToast: inlineToast,
                     retry: { [weak self] in
                         Task { [weak self] in
                             guard let self else { return }

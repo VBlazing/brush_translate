@@ -452,7 +452,10 @@ struct TranslationCardView: View {
     @State private var hoverSpeak = false
     @State private var hoverNote = false
     @State private var hoverAnalyze = false
+    @State private var toastHeight: CGFloat = 0
     private let toolbarItemSize: CGFloat = 28
+    private let cardEdgePadding: CGFloat = 20
+    private let toastBottomPadding: CGFloat = 26
 
     var body: some View {
         ZStack {
@@ -472,8 +475,9 @@ struct TranslationCardView: View {
                 .padding(.horizontal, 20)
                 Spacer()
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, cardEdgePadding)
             .padding(.horizontal, 20)
+            .padding(.bottom, data.toast == nil ? 0 : toastHeight)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(theme.cardBackground)
@@ -482,9 +486,28 @@ struct TranslationCardView: View {
             .frame(width: 520)
             .edgesIgnoringSafeArea(.all)
             if let toast = data.toast {
-                ToastView(toast: toast, theme: theme)
-                    .padding(.bottom, 12)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+                VStack {
+                    Spacer()
+                    ToastView(toast: toast, theme: theme)
+                        .padding(.bottom, toastBottomPadding)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .preference(key: ToastHeightPreferenceKey.self, value: proxy.size.height)
+                            }
+                        )
+                }
+                .frame(maxHeight: .infinity)
+            }
+        }
+        .onPreferenceChange(ToastHeightPreferenceKey.self) { height in
+            if data.toast != nil {
+                toastHeight = height
+            }
+        }
+        .onChange(of: data.toast != nil) { hasToast in
+            if !hasToast {
+                toastHeight = 0
             }
         }
         .onHover { hovering in
@@ -631,11 +654,16 @@ struct TranslationCardView: View {
                 .lineSpacing(6)
         case .failure:
             VStack(spacing: 12) {
-                Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(theme.errorText)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.leading)
+                if let inlineToast = data.inlineToast {
+                    ToastView(toast: inlineToast, theme: theme)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(theme.errorText)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.leading)
+                }
                 if let onRetry = data.onRetry {
                     Button("重试", action: onRetry)
                         .buttonStyle(.borderedProminent)
@@ -845,6 +873,7 @@ struct TranslationCardData {
     let showAnalyzeButton: Bool
     let isAnalyzing: Bool
     let toast: ToastData?
+    let inlineToast: ToastData?
 }
 
 struct ToastData {
@@ -863,10 +892,9 @@ struct ToastView: View {
     var body: some View {
         HStack {
             Image(systemName: toast.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .imageScale(.medium)
             Text(toast.message)
-                .font(.footnote)
         }
+        .font(.footnote)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
@@ -874,6 +902,14 @@ struct ToastView: View {
                 .fill((toast.kind == .success ? theme.translateText : theme.errorText).opacity(0.12))
         )
         .foregroundColor(toast.kind == .success ? theme.translateText : theme.errorText)
+    }
+}
+
+private struct ToastHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

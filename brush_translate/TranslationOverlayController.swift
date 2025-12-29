@@ -49,7 +49,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: onToggleComponent,
             showAnalyzeButton: true,
             isAnalyzing: isAnalyzing,
-            toast: toast
+            toast: toast,
+            inlineToast: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -72,7 +73,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
-            toast: nil
+            toast: nil,
+            inlineToast: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -95,14 +97,15 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
-            toast: nil
+            toast: nil,
+            inlineToast: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil)), theme: theme)
     }
 
-    func showFailure(sourceText: String, message: String, theme: ThemeOption, retry: @escaping () -> Void) {
+    func showFailure(sourceText: String, message: String, theme: ThemeOption, inlineToast: ToastData? = nil, retry: @escaping () -> Void) {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: message,
@@ -118,7 +121,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
-            toast: nil
+            toast: nil,
+            inlineToast: inlineToast
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
