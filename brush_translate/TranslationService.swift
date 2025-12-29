@@ -62,6 +62,7 @@ enum TranslationError: Error {
     case invalidResponse
     case serviceError(String)
     case analyzeFailed(String)
+    case languageMismatch(String)
 }
 
 final class TranslationService {
@@ -77,7 +78,8 @@ final class TranslationService {
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
         if source != .auto, languageMatchesExpected(text: normalized, expected: source) == false {
-            throw TranslationError.serviceError("语言不一致")
+            let detectedName = detectedDisplayName(for: normalized, fallback: "未知语言")
+            throw TranslationError.languageMismatch(detectedName)
         }
 
         let cacheKey = cacheKeyFor(text: normalized, source: source, target: target)
@@ -524,6 +526,8 @@ extension TranslationError: LocalizedError {
             return message
         case .analyzeFailed(let message):
             return message
+        case .languageMismatch(let detectedName):
+            return "语言不一致，当前检测到语言为：\(detectedName)"
         }
     }
 }

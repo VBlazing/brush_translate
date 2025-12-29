@@ -453,9 +453,28 @@ struct TranslationCardView: View {
     @State private var hoverNote = false
     @State private var hoverAnalyze = false
     @State private var toastHeight: CGFloat = 0
+    @State private var selectedSourceLanguage: LanguageOption
+    @State private var hoverRetry = false
     private let toolbarItemSize: CGFloat = 28
     private let cardEdgePadding: CGFloat = 20
     private let toastBottomPadding: CGFloat = 26
+
+    init(
+        data: TranslationCardData,
+        theme: ThemeOption,
+        onHoverChange: @escaping (Bool) -> Void,
+        onSpeak: (() -> Void)?,
+        onSaveNote: (() -> Void)?,
+        onAnalyze: (() -> Void)?
+    ) {
+        self.data = data
+        self.theme = theme
+        self.onHoverChange = onHoverChange
+        self.onSpeak = onSpeak
+        self.onSaveNote = onSaveNote
+        self.onAnalyze = onAnalyze
+        _selectedSourceLanguage = State(initialValue: data.selectedSourceLanguage)
+    }
 
     var body: some View {
         ZStack {
@@ -505,10 +524,13 @@ struct TranslationCardView: View {
                 toastHeight = height
             }
         }
-        .onChange(of: data.toast != nil) { hasToast in
+        .onChange(of: data.toast != nil) { _, hasToast in
             if !hasToast {
                 toastHeight = 0
             }
+        }
+        .onChange(of: data.selectedSourceLanguage) { _, newValue in
+            selectedSourceLanguage = newValue
         }
         .onHover { hovering in
             onHoverChange(hovering)
@@ -654,19 +676,49 @@ struct TranslationCardView: View {
                 .lineSpacing(6)
         case .failure:
             VStack(spacing: 12) {
-                if let inlineToast = data.inlineToast {
-                    ToastView(toast: inlineToast, theme: theme)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                } else {
-                    Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(theme.errorText)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .multilineTextAlignment(.leading)
-                }
+                let toast = data.inlineToast ?? ToastData(
+                    kind: .failure,
+                    message: data.translatedText.isEmpty ? "翻译失败" : data.translatedText
+                )
+                ToastView(toast: toast, theme: theme)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 if let onRetry = data.onRetry {
-                    Button("重试", action: onRetry)
-                        .buttonStyle(.borderedProminent)
+                    HStack(spacing: 10) {
+                        if data.showLanguagePicker {
+                            Picker("", selection: $selectedSourceLanguage) {
+                                ForEach(LanguageOption.allCases) { option in
+                                    Text(option.displayName).tag(option)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .font(.footnote)
+                            .padding(.vertical, 4) 
+                            .onChange(of: selectedSourceLanguage) { _, newValue in
+                                data.onChangeSourceLanguage?(newValue)
+                            }
+                        }
+                        Button(action: onRetry) {
+                            Text("重试")
+                                .font(.footnote)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(hoverRetry ? theme.translateText.opacity(0.12) : theme.cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(theme.translateText.opacity(hoverRetry ? 0.5 : 0.35), lineWidth: 1)
+                        )
+                        .foregroundColor(theme.translateText)
+                        .animation(.easeInOut(duration: 0.12), value: hoverRetry)
+                        .onHover { hovering in
+                            hoverRetry = hovering
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -874,6 +926,10 @@ struct TranslationCardData {
     let isAnalyzing: Bool
     let toast: ToastData?
     let inlineToast: ToastData?
+    let showLanguagePicker: Bool
+    let detectedLanguageDisplayName: String?
+    let selectedSourceLanguage: LanguageOption
+    let onChangeSourceLanguage: ((LanguageOption) -> Void)?
 }
 
 struct ToastData {
