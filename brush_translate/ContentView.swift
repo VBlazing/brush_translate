@@ -204,11 +204,15 @@ struct ContentView: View {
             model.hotKeyDefinition = pendingHotKey
             self.pendingHotKey = nil
             isEditingShortcut = false
+            model.isEditingHotKey = false
+            HotKeyManager.shared.setEnabled(true)
             keyCaptureMonitor.stop()
             return
         }
 
         isEditingShortcut = true
+        model.isEditingHotKey = true
+        HotKeyManager.shared.setEnabled(false)
         pendingHotKey = nil
         keyCaptureMonitor.start { event in
             if event.keyCode == 53 {
@@ -228,6 +232,8 @@ struct ContentView: View {
     private func cancelShortcutEditing() {
         pendingHotKey = nil
         isEditingShortcut = false
+        model.isEditingHotKey = false
+        HotKeyManager.shared.setEnabled(true)
         keyCaptureMonitor.stop()
     }
 }

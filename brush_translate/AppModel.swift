@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
     @Published var theme: ThemeOption
     @Published var deepseekAPIKey: String
     @Published var hotKeyDefinition: HotKeyDefinition
+    @Published var isEditingHotKey: Bool = false
 
     private let translator = TranslationService()
     private let overlay = TranslationOverlayController()
@@ -91,7 +92,8 @@ final class AppModel: ObservableObject {
         }
 
         HotKeyManager.shared.register { [weak self] in
-            self?.triggerTranslationFromSelection()
+            guard let self, self.isEditingHotKey == false else { return }
+            self.triggerTranslationFromSelection()
         }
         HotKeyManager.shared.updateHotKey(
             keyCode: hotKeyDefinition.keyCode,
