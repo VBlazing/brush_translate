@@ -81,6 +81,7 @@ final class TranslationService {
         apiKey: String?,
         useCache: Bool = true
     ) async throws -> TranslationResult {
+        let startTime = CFAbsoluteTimeGetCurrent()
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -94,13 +95,21 @@ final class TranslationService {
             let cacheKey = cacheKeyFor(text: normalized, source: source, target: target, provider: provider, model: model)
             print("cacheKey", cacheKey)
             if let cached = cache.object(forKey: cacheKey)?.value {
+                logTranslationDuration(
+                    startTime: startTime,
+                    provider: provider,
+                    model: model,
+                    cacheHit: true
+                )
                 return cached
             }
         }
 
-        switch provider {
-        case .deepseek:
-            return try await translateWithOpenAICompatible(
+        do {
+            let result: TranslationResult
+            switch provider {
+            case .deepseek:
+                result = try await translateWithOpenAICompatible(
                 url: URL(string: "https://api.deepseek.com/v1/chat/completions")!,
                 provider: provider,
                 model: model,
@@ -109,8 +118,8 @@ final class TranslationService {
                 to: target,
                 apiKey: trimmedKey
             )
-        case .doubao:
-            return try await translateWithOpenAICompatible(
+            case .doubao:
+                result = try await translateWithOpenAICompatible(
                 url: URL(string: "https://ark.cn-beijing.volces.com/api/v3/chat/completions")!,
                 provider: provider,
                 model: model,
@@ -119,14 +128,30 @@ final class TranslationService {
                 to: target,
                 apiKey: trimmedKey
             )
-        case .gemini:
-            return try await translateWithGemini(
+            case .gemini:
+                result = try await translateWithGemini(
                 text: normalized,
                 from: source,
                 to: target,
                 model: model,
                 apiKey: trimmedKey
             )
+            }
+            logTranslationDuration(
+                startTime: startTime,
+                provider: provider,
+                model: model,
+                cacheHit: false
+            )
+            return result
+        } catch {
+            logTranslationDuration(
+                startTime: startTime,
+                provider: provider,
+                model: model,
+                cacheHit: false
+            )
+            throw error
         }
     }
 
@@ -503,6 +528,18 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
 
     private func cacheKeyFor(text: String, source: LanguageOption, target: LanguageOption, provider: TranslationProvider, model: String) -> NSString {
         "\(provider.rawValue)|\(model)|\(source.code)|\(target.code)|\(text)" as NSString
+    }
+
+    private func logTranslationDuration(
+        startTime: CFAbsoluteTime,
+        provider: TranslationProvider,
+        model: String,
+        cacheHit: Bool
+    ) {
+        let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+        let tag = cacheHit ? "cache" : "network"
+        let duration = String(format: "%.3f", elapsed)
+        print("Translation time (\(provider.rawValue) \(model)) [\(tag)]: \(duration)s")
     }
 
     private func definitionsForWord(_ word: String) -> [String] {
