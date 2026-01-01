@@ -15,6 +15,12 @@ final class AppModel: ObservableObject {
     @Published var statusMessage: String = "等待选中文本..."
     @Published var theme: ThemeOption
     @Published var deepseekAPIKey: String
+    @Published var doubaoAPIKey: String
+    @Published var geminiAPIKey: String
+    @Published var selectedProvider: TranslationProvider
+    @Published var deepseekModel: String
+    @Published var doubaoModel: String
+    @Published var geminiModel: String
     @Published var hotKeyDefinition: HotKeyDefinition
 
     private let translator = TranslationService()
@@ -33,6 +39,12 @@ final class AppModel: ObservableObject {
         let storedTarget = UserDefaults.standard.string(forKey: UserDefaultsKeys.targetLanguage) ?? LanguageOption.simplifiedChinese.code
         let storedTheme = UserDefaults.standard.string(forKey: UserDefaultsKeys.theme) ?? ThemeOption.night.rawValue
         let storedAPIKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.deepseekAPIKey) ?? ""
+        let storedDoubaoKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.doubaoAPIKey) ?? ""
+        let storedGeminiKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.geminiAPIKey) ?? ""
+        let storedProvider = UserDefaults.standard.string(forKey: UserDefaultsKeys.selectedProvider) ?? TranslationProvider.deepseek.rawValue
+        let storedDeepseekModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.deepseekModel) ?? TranslationProvider.deepseek.defaultModel
+        let storedDoubaoModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.doubaoModel) ?? TranslationProvider.doubao.defaultModel
+        let storedGeminiModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.geminiModel) ?? TranslationProvider.gemini.defaultModel
         let storedHotKeyCode = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyCode) as? Int
         let storedHotKeyModifiers = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyModifiers) as? Int
 
@@ -40,6 +52,12 @@ final class AppModel: ObservableObject {
         targetLanguage = LanguageOption(rawValue: storedTarget) ?? .simplifiedChinese
         theme = ThemeOption(rawValue: storedTheme) ?? .night
         deepseekAPIKey = storedAPIKey
+        doubaoAPIKey = storedDoubaoKey
+        geminiAPIKey = storedGeminiKey
+        selectedProvider = TranslationProvider(rawValue: storedProvider) ?? .deepseek
+        deepseekModel = TranslationProvider.deepseek.models.contains(storedDeepseekModel) ? storedDeepseekModel : TranslationProvider.deepseek.defaultModel
+        doubaoModel = TranslationProvider.doubao.models.contains(storedDoubaoModel) ? storedDoubaoModel : TranslationProvider.doubao.defaultModel
+        geminiModel = TranslationProvider.gemini.models.contains(storedGeminiModel) ? storedGeminiModel : TranslationProvider.gemini.defaultModel
         if let storedHotKeyCode, let storedHotKeyModifiers {
             hotKeyDefinition = HotKeyDefinition(
                 keyCode: UInt32(storedHotKeyCode),
@@ -70,6 +88,42 @@ final class AppModel: ObservableObject {
         $deepseekAPIKey
             .sink { value in
                 UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.deepseekAPIKey)
+            }
+            .store(in: &cancellables)
+
+        $doubaoAPIKey
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.doubaoAPIKey)
+            }
+            .store(in: &cancellables)
+
+        $geminiAPIKey
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.geminiAPIKey)
+            }
+            .store(in: &cancellables)
+
+        $selectedProvider
+            .sink { value in
+                UserDefaults.standard.setValue(value.rawValue, forKey: UserDefaultsKeys.selectedProvider)
+            }
+            .store(in: &cancellables)
+
+        $deepseekModel
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.deepseekModel)
+            }
+            .store(in: &cancellables)
+
+        $doubaoModel
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.doubaoModel)
+            }
+            .store(in: &cancellables)
+
+        $geminiModel
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.geminiModel)
             }
             .store(in: &cancellables)
 
@@ -146,11 +200,16 @@ final class AppModel: ObservableObject {
         }
 
         do {
+            let provider = selectedProvider
+            let modelName = resolvedModelSelection(for: provider)
+            let apiKey = apiKey(for: provider)
             let result = try await translator.translate(
                 text: trimmed,
                 from: sourceLanguage,
                 to: targetLanguage,
-                apiKey: deepseekAPIKey
+                provider: provider,
+                model: modelName,
+                apiKey: apiKey
             )
 
             await MainActor.run {
@@ -166,7 +225,8 @@ final class AppModel: ObservableObject {
                     theme: self.theme,
                     onAnalyze: { [weak self] in
                         self?.startAnalyze()
-                    }
+                    },
+                    showAnalyzeButton: provider == .deepseek
                 )
             }
         } catch {
@@ -195,6 +255,7 @@ final class AppModel: ObservableObject {
     }
 
     private func startAnalyze() {
+        guard selectedProvider == .deepseek else { return }
         guard let translation = lastTranslation else { return }
         let token = UUID()
         Task {
@@ -267,7 +328,8 @@ final class AppModel: ObservableObject {
             },
             onToggleComponent: { [weak self] id in
                 self?.toggleComponent(id)
-            }
+            },
+            showAnalyzeButton: selectedProvider == .deepseek
         )
     }
 
@@ -285,6 +347,49 @@ final class AppModel: ObservableObject {
             self.presentOverlaySuccess(translation: translation, isAnalyzing: false)
         }
     }
+
+    func validateProvider(_ provider: TranslationProvider) async -> Result<Void, TranslationError> {
+        let modelName = resolvedModelSelection(for: provider)
+        let apiKey = apiKey(for: provider)
+        do {
+            try await translator.validate(provider: provider, model: modelName, apiKey: apiKey)
+            return .success(())
+        } catch let error as TranslationError {
+            return .failure(error)
+        } catch {
+            return .failure(.networkError(error.localizedDescription))
+        }
+    }
+
+    private func apiKey(for provider: TranslationProvider) -> String {
+        switch provider {
+        case .deepseek:
+            return deepseekAPIKey
+        case .doubao:
+            return doubaoAPIKey
+        case .gemini:
+            return geminiAPIKey
+        }
+    }
+
+    private func modelSelection(for provider: TranslationProvider) -> String {
+        switch provider {
+        case .deepseek:
+            return deepseekModel
+        case .doubao:
+            return doubaoModel
+        case .gemini:
+            return geminiModel
+        }
+    }
+
+    private func resolvedModelSelection(for provider: TranslationProvider) -> String {
+        let selection = modelSelection(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
+        if provider.models.contains(selection) {
+            return selection
+        }
+        return provider.defaultModel
+    }
 }
 
 enum UserDefaultsKeys {
@@ -292,6 +397,12 @@ enum UserDefaultsKeys {
     static let targetLanguage = "brush_translate.target"
     static let theme = "brush_translate.theme"
     static let deepseekAPIKey = "brush_translate.deepseek.apiKey"
+    static let doubaoAPIKey = "brush_translate.doubao.apiKey"
+    static let geminiAPIKey = "brush_translate.gemini.apiKey"
+    static let selectedProvider = "brush_translate.provider"
+    static let deepseekModel = "brush_translate.deepseek.model"
+    static let doubaoModel = "brush_translate.doubao.model"
+    static let geminiModel = "brush_translate.gemini.model"
     static let hotKeyCode = "brush_translate.hotkey.code"
     static let hotKeyModifiers = "brush_translate.hotkey.modifiers"
 }

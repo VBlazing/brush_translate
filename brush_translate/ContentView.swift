@@ -10,7 +10,11 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var revealAPIKey = false
+    @State private var revealedProviders = Set<TranslationProvider>()
+    @State private var expandedProviders = Set<TranslationProvider>()
+    @State private var hoveredProvider: TranslationProvider?
+    @State private var verifyingProviders = Set<TranslationProvider>()
+    @State private var verificationResults: [TranslationProvider: VerificationResult] = [:]
     @State private var isEditingShortcut = false
     @State private var pendingHotKey: HotKeyDefinition?
     @State private var keyCaptureMonitor = KeyCaptureMonitor()
@@ -37,6 +41,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     translationSection
+                    modelSection
                     featureSection
                     themeSection
                 }
@@ -104,6 +109,17 @@ struct ContentView: View {
         }
     }
 
+    private var modelSection: some View {
+        let providers = TranslationProvider.allCases
+        return SettingSection(theme: theme, title: "服务", subtitle: nil) {
+            VStack(spacing: 10) {
+                ForEach(providers) { provider in
+                    modelProviderRow(for: provider)
+                }
+            }
+        }
+    }
+
     private var featureSection: some View {
         SettingSection(theme: theme, title: "功能", subtitle: nil) {
             SettingField(theme: theme, title: "翻译快捷键", caption: "选中文字后触发翻译，弹出卡片显示内容") {
@@ -134,48 +150,6 @@ struct ContentView: View {
                     }
                 }
             }
-
-            SettingField(theme: theme, title: "Deepseek API Key", caption: "用于调用大模型翻译，仅保存在本机") {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 10) {
-                        Group {
-                            if revealAPIKey {
-                                TextField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
-                                    .textFieldStyle(.plain)
-                            } else {
-                                SecureField("在此粘贴你的 API Key", text: $model.deepseekAPIKey)
-                                    .textFieldStyle(.plain)
-                            }
-                        }
-                        .foregroundColor(theme.sourceText)
-                        .padding(.vertical, 2)
-                        .frame(maxWidth: 200)
-                        .formFieldBackground(theme)
-
-                        Button(action: { revealAPIKey.toggle() }) {
-                            Image(systemName: revealAPIKey ? "eye.slash" : "eye")
-                                .foregroundColor(theme.translateText)
-                        }
-                        .buttonStyle(.plain)
-                        .help(revealAPIKey ? "隐藏密钥" : "显示密钥")
-                    }
-
-                    HStack(spacing: 8) {
-                        if model.deepseekAPIKey.isEmpty {
-                            Image(systemName: "lock.slash")
-                                .foregroundColor(Color.orange)
-                            Text("未配置密钥，翻译将无法调用大模型接口。")
-                                .foregroundColor(theme.translateText)
-                        } else {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(Color.green)
-                            Text("已保存到本机，仅用于翻译调用。")
-                                .foregroundColor(theme.translateText)
-                        }
-                    }
-                    .font(.footnote)
-                }
-            }
         }
     }
 
@@ -192,6 +166,233 @@ struct ContentView: View {
                 .formFieldBackground(theme)
             }
         }
+    }
+
+    @ViewBuilder
+    private func modelProviderRow(for provider: TranslationProvider) -> some View {
+        let isExpanded = expandedProviders.contains(provider)
+        let isHovered = hoveredProvider == provider
+        let showActions = isExpanded || isHovered
+        let isSelected = model.selectedProvider == provider
+        let apiKeyMissing = trimmedAPIKey(for: provider).isEmpty
+        let hoverOpacity: CGFloat = theme == .night ? 0.35 : 0.32
+        let hoverBackground = theme == .night
+            ? theme.divider.opacity(hoverOpacity)
+            : Color.black.opacity(0.05)
+        let rowCornerRadius: CGFloat = 14
+        let fieldWidth: CGFloat = 240
+        let actionOpacity = showActions ? 1.0 : 0.0
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .foregroundColor(theme.translateText)
+
+                Image(systemName: provider.iconName)
+                    .foregroundColor(theme.sourceText)
+
+                HStack(spacing: 6) {
+                    Text(provider.displayName)
+                        .font(.headline.weight(.semibold))
+                        .foregroundColor(theme.sourceText)
+                    if isSelected {
+                        Text("已选择")
+                            .font(.footnote)
+                            .foregroundColor(theme.translateText)
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 10) {
+                    if apiKeyMissing {
+                        Text("未填写 API Key")
+                            .font(.footnote)
+                            .foregroundColor(theme.errorText)
+                    }
+                    Button(action: { applyProvider(provider) }) {
+                        Text("应用")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(theme.sourceText)
+                    .disabled(apiKeyMissing)
+                }
+                .opacity(actionOpacity)
+                .allowsHitTesting(showActions)
+            }
+            .frame(height: 48)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering {
+                    hoveredProvider = provider
+                } else if hoveredProvider == provider {
+                    hoveredProvider = nil
+                }
+            }
+            .onTapGesture {
+                toggleProviderExpansion(provider)
+            }
+
+            if isExpanded {
+                VStack(spacing: 10) {
+                    Divider()
+                        .background(theme.divider)
+                        .padding(.bottom, 10)
+                    SettingField(theme: theme, title: "模型选择", caption: nil) {
+                        ModelPicker(
+                            items: provider.models,
+                            selection: modelSelectionBinding(for: provider),
+                            theme: theme
+                        )
+                        .frame(width: fieldWidth)
+                        .formFieldBackground(theme)
+                    }
+
+                    SettingField(theme: theme, title: "API Key", caption: nil) {
+                        ZStack(alignment: .trailing) {
+                            let eyeButtonInset: CGFloat = 8
+                            let eyeButtonWidth: CGFloat = 16
+                            Group {
+                                if isAPIKeyRevealed(for: provider) {
+                                    TextField("在此粘贴你的 API Key", text: apiKeyBinding(for: provider))
+                                        .textFieldStyle(.plain)
+                                } else {
+                                    SecureField("在此粘贴你的 API Key", text: apiKeyBinding(for: provider))
+                                        .textFieldStyle(.plain)
+                                }
+                            }
+                            .foregroundColor(theme.sourceText)
+                            .padding(.vertical, 2)
+                            .padding(.trailing, eyeButtonWidth + eyeButtonInset * 2)
+
+                            Button(action: { toggleAPIKeyReveal(for: provider) }) {
+                                Image(systemName: isAPIKeyRevealed(for: provider) ? "eye.slash" : "eye")
+                                    .foregroundColor(theme.translateText)
+                            }
+                            .buttonStyle(.plain)
+                            .help(isAPIKeyRevealed(for: provider) ? "隐藏密钥" : "显示密钥")
+                        }
+                        .frame(width: fieldWidth)
+                        .formFieldBackground(theme)
+                    }
+
+                    let isVerifying = verifyingProviders.contains(provider)
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 10) {
+                            if isVerifying {
+                                LoadingIndicator(theme: theme, size: 14, lineWidth: 2)
+                            } else if let result = verificationResults[provider] {
+                                HStack(spacing: 6) {
+                                    Image(systemName: result.isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                    Text(result.message)
+                                        .font(.footnote)
+                                }
+                                .foregroundColor(result.isSuccess ? theme.translateText : theme.errorText)
+                            }
+
+                            Button(action: { startVerification(for: provider) }) {
+                                Text("验证")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(theme.sourceText)
+                            .disabled(isVerifying)
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+                .padding(.top, 6)
+                .padding(.leading, 26)
+                .padding(.bottom, 12)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                .fill((isExpanded || isHovered) ? hoverBackground : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                .stroke(isExpanded ? theme.divider : Color.clear, lineWidth: 1)
+        )
+    }
+
+    private func toggleProviderExpansion(_ provider: TranslationProvider) {
+        if expandedProviders.contains(provider) {
+            expandedProviders.remove(provider)
+        } else {
+            expandedProviders.insert(provider)
+        }
+    }
+
+    private func applyProvider(_ provider: TranslationProvider) {
+        normalizeModelSelection(for: provider)
+        model.selectedProvider = provider
+    }
+
+    private func startVerification(for provider: TranslationProvider) {
+        normalizeModelSelection(for: provider)
+        verifyingProviders.insert(provider)
+        verificationResults[provider] = nil
+        Task {
+            let result = await model.validateProvider(provider)
+            await MainActor.run {
+                verifyingProviders.remove(provider)
+                switch result {
+                case .success:
+                    verificationResults[provider] = VerificationResult(message: "验证成功", isSuccess: true)
+                case .failure(let error):
+                    verificationResults[provider] = VerificationResult(message: error.localizedDescription, isSuccess: false)
+                }
+            }
+        }
+    }
+
+    private func modelSelectionBinding(for provider: TranslationProvider) -> Binding<String> {
+        switch provider {
+        case .deepseek:
+            return $model.deepseekModel
+        case .doubao:
+            return $model.doubaoModel
+        case .gemini:
+            return $model.geminiModel
+        }
+    }
+
+    private func apiKeyBinding(for provider: TranslationProvider) -> Binding<String> {
+        switch provider {
+        case .deepseek:
+            return $model.deepseekAPIKey
+        case .doubao:
+            return $model.doubaoAPIKey
+        case .gemini:
+            return $model.geminiAPIKey
+        }
+    }
+
+    private func isAPIKeyRevealed(for provider: TranslationProvider) -> Bool {
+        revealedProviders.contains(provider)
+    }
+
+    private func toggleAPIKeyReveal(for provider: TranslationProvider) {
+        if revealedProviders.contains(provider) {
+            revealedProviders.remove(provider)
+        } else {
+            revealedProviders.insert(provider)
+        }
+    }
+
+    private func normalizeModelSelection(for provider: TranslationProvider) {
+        let selection = modelSelectionBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = provider.models.contains(selection) ? selection : provider.defaultModel
+        if selection != resolved {
+            modelSelectionBinding(for: provider).wrappedValue = resolved
+        }
+    }
+
+    private func trimmedAPIKey(for provider: TranslationProvider) -> String {
+        apiKeyBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var currentHotKeyKeys: [String] {
@@ -438,6 +639,221 @@ private struct ThemePreview: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(option.sourceText.opacity(0.15), lineWidth: 1)
             )
+    }
+}
+
+private struct ModelPicker: NSViewRepresentable {
+    let items: [String]
+    @Binding var selection: String
+    let theme: ThemeOption
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton()
+        button.isBordered = false
+        button.pullsDown = false
+        button.focusRingType = .none
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.didSelect(_:))
+        context.coordinator.configure(button: button, items: items, selection: selection, theme: theme)
+        return button
+    }
+
+    func updateNSView(_ nsView: NSPopUpButton, context: Context) {
+        context.coordinator.configure(button: nsView, items: items, selection: selection, theme: theme)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
+    }
+
+    final class Coordinator: NSObject {
+        @Binding var selection: String
+
+        init(selection: Binding<String>) {
+            _selection = selection
+        }
+
+        func configure(button: NSPopUpButton, items: [String], selection: String, theme: ThemeOption) {
+            if button.menu == nil {
+                button.menu = NSMenu()
+            }
+            button.menu?.autoenablesItems = false
+            let currentItems = button.itemArray.map { $0.title }
+            let menuWidth = MenuItemView.menuWidth(for: items)
+            if currentItems != items {
+                button.removeAllItems()
+                for item in items {
+                    let menuItem = NSMenuItem()
+                    menuItem.title = item
+                    menuItem.target = self
+                    menuItem.action = #selector(menuItemSelected(_:))
+                    let view = MenuItemView(
+                        title: item,
+                        isSelected: item == selection,
+                        theme: theme
+                    )
+                    view.frame = NSRect(x: 0, y: 0, width: menuWidth, height: MenuItemView.rowHeight)
+                    view.onSelect = { [weak self] title in
+                        self?.selection = title
+                        button.selectItem(withTitle: title)
+                    }
+                    menuItem.view = view
+                    button.menu?.addItem(menuItem)
+                }
+            } else {
+                for menuItem in button.itemArray {
+                    if let view = menuItem.view as? MenuItemView {
+                        view.update(isSelected: menuItem.title == selection, theme: theme)
+                    }
+                }
+            }
+
+            if let index = items.firstIndex(of: selection) {
+                button.selectItem(at: index)
+            } else if let first = items.first {
+                button.selectItem(withTitle: first)
+                self.selection = first
+            }
+        }
+
+        @objc func didSelect(_ sender: NSPopUpButton) {
+            if let title = sender.selectedItem?.title {
+                selection = title
+            }
+        }
+
+        @objc private func menuItemSelected(_ sender: NSMenuItem) {
+            selection = sender.title
+        }
+    }
+
+    private final class MenuItemView: NSView {
+        static let rowHeight: CGFloat = 30
+        private let titleLabel = NSTextField(labelWithString: "")
+        private let checkmark = NSImageView()
+        private let highlightView = NSView()
+        private var tracking: NSTrackingArea?
+        private var isHovering = false
+        private var isSelected = false
+        private var theme: ThemeOption = .night
+        var onSelect: ((String) -> Void)?
+
+        init(title: String, isSelected: Bool, theme: ThemeOption) {
+            self.isSelected = isSelected
+            self.theme = theme
+            super.init(frame: .zero)
+            wantsLayer = true
+            layer?.cornerRadius = 8
+            layer?.masksToBounds = true
+
+            highlightView.wantsLayer = true
+            highlightView.layer?.cornerRadius = 8
+            highlightView.translatesAutoresizingMaskIntoConstraints = false
+
+            checkmark.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
+            checkmark.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+            checkmark.translatesAutoresizingMaskIntoConstraints = false
+
+            titleLabel.stringValue = title
+            titleLabel.translatesAutoresizingMaskIntoConstraints = false
+            titleLabel.alignment = .left
+
+            addSubview(highlightView)
+            addSubview(checkmark)
+            addSubview(titleLabel)
+
+            NSLayoutConstraint.activate([
+                highlightView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+                highlightView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+                highlightView.centerYAnchor.constraint(equalTo: centerYAnchor),
+                highlightView.heightAnchor.constraint(equalToConstant: 24),
+
+                checkmark.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                checkmark.centerYAnchor.constraint(equalTo: centerYAnchor),
+                checkmark.widthAnchor.constraint(equalToConstant: 14),
+                checkmark.heightAnchor.constraint(equalToConstant: 14),
+
+                titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 32),
+                titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+                titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+            ])
+
+            update(isSelected: isSelected, theme: theme)
+        }
+
+        required init?(coder: NSCoder) {
+            nil
+        }
+
+        override var intrinsicContentSize: NSSize {
+            NSSize(width: 240, height: Self.rowHeight)
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let tracking {
+                removeTrackingArea(tracking)
+            }
+            let options: NSTrackingArea.Options = [.mouseEnteredAndExited, .activeAlways, .inVisibleRect]
+            let area = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
+            addTrackingArea(area)
+            tracking = area
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            isHovering = true
+            updateBackground()
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            isHovering = false
+            updateBackground()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            onSelect?(titleLabel.stringValue)
+            enclosingMenuItem?.menu?.cancelTracking()
+        }
+
+        override var acceptsFirstResponder: Bool {
+            false
+        }
+
+        func update(isSelected: Bool, theme: ThemeOption) {
+            self.isSelected = isSelected
+            self.theme = theme
+            checkmark.isHidden = !isSelected
+            checkmark.contentTintColor = theme.sourceTextNSColor
+            titleLabel.textColor = theme.sourceTextNSColor
+            updateBackground()
+        }
+
+        private func updateBackground() {
+            let hoverColor: NSColor = theme == .night
+                ? NSColor.white.withAlphaComponent(0.12)
+                : NSColor.black.withAlphaComponent(0.08)
+            highlightView.layer?.backgroundColor = isHovering ? hoverColor.cgColor : NSColor.clear.cgColor
+        }
+
+        static func menuWidth(for items: [String]) -> CGFloat {
+            let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            let textWidth = items
+                .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+                .max() ?? 120
+            let padding: CGFloat = 10 + 14 + 8 + 10
+            return max(220, ceil(textWidth + padding + 32))
+        }
+    }
+}
+
+private extension ThemeOption {
+    var sourceTextNSColor: NSColor {
+        switch self {
+        case .night:
+            return NSColor(srgbRed: 240/255, green: 240/255, blue: 242/255, alpha: 1)
+        case .light:
+            return NSColor(srgbRed: 28/255, green: 28/255, blue: 30/255, alpha: 1)
+        }
     }
 }
 
@@ -845,6 +1261,11 @@ struct TranslationCardData {
     let showAnalyzeButton: Bool
     let isAnalyzing: Bool
     let toast: ToastData?
+}
+
+private struct VerificationResult {
+    let message: String
+    let isSuccess: Bool
 }
 
 struct ToastData {

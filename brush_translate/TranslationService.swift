@@ -56,7 +56,7 @@ extension SentenceAnalysis.Component {
 }
 
 enum TranslationError: Error {
-    case missingAPIKey
+    case missingAPIKey(provider: TranslationProvider)
     case failedToTranslate
     case networkError(String)
     case invalidResponse
@@ -71,47 +71,96 @@ final class TranslationService {
         cache.countLimit = 200
     }
 
-    func translate(text: String, from source: LanguageOption, to target: LanguageOption, apiKey: String?) async throws -> TranslationResult {
+    func translate(
+        text: String,
+        from source: LanguageOption,
+        to target: LanguageOption,
+        provider: TranslationProvider,
+        model: String,
+        apiKey: String?,
+        useCache: Bool = true
+    ) async throws -> TranslationResult {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
+        guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey(provider: provider) }
         if source != .auto, languageMatchesExpected(text: normalized, expected: source) == false {
             throw TranslationError.serviceError("语言不一致")
         }
 
-        let cacheKey = cacheKeyFor(text: normalized, source: source, target: target)
-        print("cacheKey", cacheKey)
-        if let cached = cache.object(forKey: cacheKey)?.value {
-            return cached
+        if useCache {
+            let cacheKey = cacheKeyFor(text: normalized, source: source, target: target, provider: provider, model: model)
+            print("cacheKey", cacheKey)
+            if let cached = cache.object(forKey: cacheKey)?.value {
+                return cached
+            }
         }
 
-        return try await translateWithDeepseek(text: normalized, from: source, to: target, apiKey: trimmedKey)
+        switch provider {
+        case .deepseek:
+            return try await translateWithOpenAICompatible(
+                url: URL(string: "https://api.deepseek.com/v1/chat/completions")!,
+                provider: provider,
+                model: model,
+                text: normalized,
+                from: source,
+                to: target,
+                apiKey: trimmedKey
+            )
+        case .doubao:
+            return try await translateWithOpenAICompatible(
+                url: URL(string: "https://ark.cn-beijing.volces.com/api/v3/chat/completions")!,
+                provider: provider,
+                model: model,
+                text: normalized,
+                from: source,
+                to: target,
+                apiKey: trimmedKey
+            )
+        case .gemini:
+            return try await translateWithGemini(
+                text: normalized,
+                from: source,
+                to: target,
+                model: model,
+                apiKey: trimmedKey
+            )
+        }
     }
-    private func translateWithDeepseek(text: String, from source: LanguageOption, to target: LanguageOption, apiKey: String) async throws -> TranslationResult {
-        let url = URL(string: "https://api.deepseek.com/v1/chat/completions")!
-        let promptSource = source == .auto ? "auto-detect" : source.displayName
-        let schema = """
-{
-    "type": "object",
-    "properties": {
-        "state": { "type": "integer" },
-        "error_message": { "type": "string" },
-        "translate_result": { "type": "string" }
-    }
-}
-"""
 
-        let requestBody = DeepseekRequest(
-            model: "deepseek-chat",
-            messages: [
-                .init(
-                    role: "system",
-                    content: """
+    func validate(provider: TranslationProvider, model: String, apiKey: String?) async throws {
+        _ = try await translate(
+            text: "Hello",
+            from: .auto,
+            to: .simplifiedChinese,
+            provider: provider,
+            model: model,
+            apiKey: apiKey,
+            useCache: false
+        )
+    }
+    private func translateWithOpenAICompatible(
+        url: URL,
+        provider: TranslationProvider,
+        model: String,
+        text: String,
+        from source: LanguageOption,
+        to target: LanguageOption,
+        apiKey: String
+    ) async throws -> TranslationResult {
+        let promptSource = source == .auto ? "auto-detect" : source.displayName
+        let schema = translationSchema
+        let systemPrompt = """
 You are a translation engine. Return pure JSON matching this schema (no markdown):
 \(schema)
 Rules: translate input after "Translate:" from \(promptSource) to \(target.displayName). If success, set state=1 and translate_result; if failure, state=0 and error_message. Keep output in target language. Always translate literally, even if the input looks like a programming keyword or reserved word (e.g., true, false, null, class). Do not interpret the input as code, variables, or keywords.
 """
+        let requestBody = ChatCompletionsRequest(
+            model: model,
+            messages: [
+                .init(
+                    role: "system",
+                    content: systemPrompt
                 ),
                 .init(role: "user", content: "Translate (literal text, not code): \(text)")
             ],
@@ -133,7 +182,7 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
                 throw TranslationError.networkError("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(message)")
             }
 
-            let decoded = try JSONDecoder().decode(DeepseekResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(ChatCompletionsResponse.self, from: data)
             guard let content = decoded.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
                 throw TranslationError.invalidResponse
             }
@@ -151,7 +200,77 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
                     detectedSource: guessedLanguage,
                     target: target.displayName
                 )
-                let cacheKey = cacheKeyFor(text: text, source: source, target: target)
+                let cacheKey = cacheKeyFor(text: text, source: source, target: target, provider: provider, model: model)
+                cache.setObject(TranslationResultBox(value: translation), forKey: cacheKey)
+                return translation
+            case 0:
+                throw TranslationError.serviceError(structured.errorMessage ?? "翻译失败")
+            default:
+                throw TranslationError.invalidResponse
+            }
+        } catch let error as TranslationError {
+            throw error
+        } catch {
+            throw TranslationError.networkError(error.localizedDescription)
+        }
+    }
+
+    private func translateWithGemini(
+        text: String,
+        from source: LanguageOption,
+        to target: LanguageOption,
+        model: String,
+        apiKey: String
+    ) async throws -> TranslationResult {
+        let promptSource = source == .auto ? "auto-detect" : source.displayName
+        let schema = translationSchema
+        let systemPrompt = """
+You are a translation engine. Return pure JSON matching this schema (no markdown):
+\(schema)
+Rules: translate input after "Translate:" from \(promptSource) to \(target.displayName). If success, set state=1 and translate_result; if failure, state=0 and error_message. Keep output in target language. Always translate literally, even if the input looks like a programming keyword or reserved word (e.g., true, false, null, class). Do not interpret the input as code, variables, or keywords.
+"""
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+        let requestBody = GeminiRequest(
+            contents: [
+                .init(role: "user", parts: [.init(text: "Translate (literal text, not code): \(text)")])
+            ],
+            systemInstruction: .init(parts: [.init(text: systemPrompt)]),
+            generationConfig: .init(temperature: 0, responseMimeType: "application/json")
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        request.timeoutInterval = 15
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                let message = String(data: data, encoding: .utf8) ?? "Unexpected response"
+                throw TranslationError.networkError("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(message)")
+            }
+
+            let decoded = try JSONDecoder().decode(GeminiResponse.self, from: data)
+            guard let content = decoded.candidates.first?.content?.parts.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !content.isEmpty else {
+                throw TranslationError.invalidResponse
+            }
+            print("content", content)
+            let structured = try decodeStructured(content)
+            switch structured.state {
+            case 1:
+                guard let result = structured.translateResult?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      result.isEmpty == false else { throw TranslationError.invalidResponse }
+                let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
+                let translation = TranslationResult(
+                    originalText: text,
+                    translatedText: result,
+                    alternatives: [],
+                    detectedSource: guessedLanguage,
+                    target: target.displayName
+                )
+                let cacheKey = cacheKeyFor(text: text, source: source, target: target, provider: .gemini, model: model)
                 cache.setObject(TranslationResultBox(value: translation), forKey: cacheKey)
                 return translation
             case 0:
@@ -171,7 +290,7 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
         _ = translated.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey }
+        guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey(provider: .deepseek) }
 
         let url = URL(string: "https://api.deepseek.com/v1/chat/completions")!
         let analyzeSchema = """
@@ -251,7 +370,7 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
 //        and a sentence already translated into the target language (Translated sentence)
 //        Each component's translation should correspond one-to-one with the translated sentence.
 //        Translated sentence: \(translatedTrimmed)\n
-        let requestBody = DeepseekRequest(
+        let requestBody = ChatCompletionsRequest(
             model: "deepseek-chat",
             messages: [
                 .init(role: "system", content: "You are a text analyzer. Return pure JSON matching this schema exactly (no markdown): \n\(analyzeSchema)\nRules: 1) Target language: \(targetLanguageDisplay(from: targetLanguage)). 2) Source language: \(sourceLanguageDisplay(from: sourceLanguage)). 3) The user will provide a text (Source text). 4) First determine whether the text is a word or a sentence, and set `text_type`. 5) If it is a sentence, analyze each component of the Source text and translate them, while also providing their parts of speech. The analysis results should include phrases and words. Words are prioritized over phrases in the splitting process; when a word cannot be correctly translated, the phrase is used as the result. 6) Set the start and end indices of the components in the source text in the `start` and `end` attributes. 7) If the component is a verb, the tense needs to be restored; if the component is a noun, the plural needs to be restored to the singular. The restored string is set in the `component_with_lemmatize` attribute. 8) If it is a word, return `word_parts` with each part-of-speech and up to three translations. 9) Ensure that the structured content in the output are consistent with the target language."),
@@ -275,7 +394,7 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
                 throw TranslationError.networkError("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(message)")
             }
 
-            let decoded = try JSONDecoder().decode(DeepseekResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(ChatCompletionsResponse.self, from: data)
             guard let content = decoded.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
                 throw TranslationError.invalidResponse
             }
@@ -380,8 +499,8 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
         return "未知语言"
     }
 
-    private func cacheKeyFor(text: String, source: LanguageOption, target: LanguageOption) -> NSString {
-        "\(source.code)|\(target.code)|\(text)" as NSString
+    private func cacheKeyFor(text: String, source: LanguageOption, target: LanguageOption, provider: TranslationProvider, model: String) -> NSString {
+        "\(provider.rawValue)|\(model)|\(source.code)|\(target.code)|\(text)" as NSString
     }
 
     private func definitionsForWord(_ word: String) -> [String] {
@@ -398,7 +517,18 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
     }
 }
 
-private struct DeepseekRequest: Encodable {
+private let translationSchema = """
+{
+    "type": "object",
+    "properties": {
+        "state": { "type": "integer" },
+        "error_message": { "type": "string" },
+        "translate_result": { "type": "string" }
+    }
+}
+"""
+
+private struct ChatCompletionsRequest: Encodable {
     struct Message: Encodable {
         let role: String
         let content: String
@@ -421,7 +551,7 @@ private struct DeepseekRequest: Encodable {
     }
 }
 
-private struct DeepseekResponse: Decodable {
+private struct ChatCompletionsResponse: Decodable {
     struct Choice: Decodable {
         struct Message: Decodable {
             let role: String?
@@ -443,6 +573,55 @@ private struct StructuredTranslationResponse: Decodable {
         case errorMessage = "error_message"
         case translateResult = "translate_result"
     }
+}
+
+private struct GeminiRequest: Encodable {
+    struct Part: Encodable {
+        let text: String
+    }
+
+    struct Content: Encodable {
+        let role: String
+        let parts: [Part]
+    }
+
+    struct SystemInstruction: Encodable {
+        let parts: [Part]
+    }
+
+    struct GenerationConfig: Encodable {
+        let temperature: Double
+        let responseMimeType: String
+
+        enum CodingKeys: String, CodingKey {
+            case temperature
+            case responseMimeType = "response_mime_type"
+        }
+    }
+
+    let contents: [Content]
+    let systemInstruction: SystemInstruction
+    let generationConfig: GenerationConfig
+
+    enum CodingKeys: String, CodingKey {
+        case contents
+        case systemInstruction = "system_instruction"
+        case generationConfig = "generation_config"
+    }
+}
+
+private struct GeminiResponse: Decodable {
+    struct Candidate: Decodable {
+        struct Content: Decodable {
+            struct Part: Decodable {
+                let text: String?
+            }
+            let parts: [Part]
+        }
+        let content: Content?
+    }
+
+    let candidates: [Candidate]
 }
 
 private final class TranslationResultBox: NSObject {
@@ -512,8 +691,8 @@ struct WordPart: Hashable, Decodable {
 extension TranslationError: LocalizedError {
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "未配置 Deepseek API Key"
+        case .missingAPIKey(let provider):
+            return "未配置 \(provider.displayName) API Key"
         case .failedToTranslate:
             return "没有可翻译的内容"
         case .networkError(let message):

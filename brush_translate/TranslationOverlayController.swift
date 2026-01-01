@@ -32,7 +32,8 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         isAnalyzing: Bool = false,
         toast: ToastData? = nil,
         onAnalyze: (() -> Void)? = nil,
-        onToggleComponent: ((SentenceComponentID) -> Void)? = nil
+        onToggleComponent: ((SentenceComponentID) -> Void)? = nil,
+        showAnalyzeButton: Bool = true
     ) {
         let data = TranslationCardData(
             sourceText: translation.originalText,
@@ -47,7 +48,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSaveNote: { [weak self] in self?.saveNote(source: translation.originalText, translated: translation.translatedText) },
             onAnalyze: onAnalyze,
             onToggleComponent: onToggleComponent,
-            showAnalyzeButton: true,
+            showAnalyzeButton: showAnalyzeButton,
             isAnalyzing: isAnalyzing,
             toast: toast
         )

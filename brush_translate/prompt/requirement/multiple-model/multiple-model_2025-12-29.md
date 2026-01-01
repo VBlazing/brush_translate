@@ -20,4 +20,4 @@
 - 豆包
     - doubao-seed-translation
 - Gemini
-    - gemini-2.5-Pro
+    - gemini-2.5-pro
