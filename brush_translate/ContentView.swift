@@ -405,11 +405,15 @@ struct ContentView: View {
             model.hotKeyDefinition = pendingHotKey
             self.pendingHotKey = nil
             isEditingShortcut = false
+            model.isEditingHotKey = false
+            HotKeyManager.shared.setEnabled(true)
             keyCaptureMonitor.stop()
             return
         }
 
         isEditingShortcut = true
+        model.isEditingHotKey = true
+        HotKeyManager.shared.setEnabled(false)
         pendingHotKey = nil
         keyCaptureMonitor.start { event in
             if event.keyCode == 53 {
@@ -429,6 +433,8 @@ struct ContentView: View {
     private func cancelShortcutEditing() {
         pendingHotKey = nil
         isEditingShortcut = false
+        model.isEditingHotKey = false
+        HotKeyManager.shared.setEnabled(true)
         keyCaptureMonitor.stop()
     }
 }
@@ -868,7 +874,29 @@ struct TranslationCardView: View {
     @State private var hoverSpeak = false
     @State private var hoverNote = false
     @State private var hoverAnalyze = false
+    @State private var toastHeight: CGFloat = 0
+    @State private var selectedSourceLanguage: LanguageOption
+    @State private var hoverRetry = false
     private let toolbarItemSize: CGFloat = 28
+    private let cardEdgePadding: CGFloat = 20
+    private let toastBottomPadding: CGFloat = 26
+
+    init(
+        data: TranslationCardData,
+        theme: ThemeOption,
+        onHoverChange: @escaping (Bool) -> Void,
+        onSpeak: (() -> Void)?,
+        onSaveNote: (() -> Void)?,
+        onAnalyze: (() -> Void)?
+    ) {
+        self.data = data
+        self.theme = theme
+        self.onHoverChange = onHoverChange
+        self.onSpeak = onSpeak
+        self.onSaveNote = onSaveNote
+        self.onAnalyze = onAnalyze
+        _selectedSourceLanguage = State(initialValue: data.selectedSourceLanguage)
+    }
 
     var body: some View {
         ZStack {
@@ -888,8 +916,9 @@ struct TranslationCardView: View {
                 .padding(.horizontal, 20)
                 Spacer()
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, cardEdgePadding)
             .padding(.horizontal, 20)
+            .padding(.bottom, data.toast == nil ? 0 : toastHeight)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(theme.cardBackground)
@@ -898,10 +927,32 @@ struct TranslationCardView: View {
             .frame(width: 520)
             .edgesIgnoringSafeArea(.all)
             if let toast = data.toast {
-                ToastView(toast: toast, theme: theme)
-                    .padding(.bottom, 12)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+                VStack {
+                    Spacer()
+                    ToastView(toast: toast, theme: theme)
+                        .padding(.bottom, toastBottomPadding)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .preference(key: ToastHeightPreferenceKey.self, value: proxy.size.height)
+                            }
+                        )
+                }
+                .frame(maxHeight: .infinity)
             }
+        }
+        .onPreferenceChange(ToastHeightPreferenceKey.self) { height in
+            if data.toast != nil {
+                toastHeight = height
+            }
+        }
+        .onChange(of: data.toast != nil) { _, hasToast in
+            if !hasToast {
+                toastHeight = 0
+            }
+        }
+        .onChange(of: data.selectedSourceLanguage) { _, newValue in
+            selectedSourceLanguage = newValue
         }
         .onHover { hovering in
             onHoverChange(hovering)
@@ -1047,14 +1098,49 @@ struct TranslationCardView: View {
                 .lineSpacing(6)
         case .failure:
             VStack(spacing: 12) {
-                Text(data.translatedText.isEmpty ? "翻译失败" : data.translatedText)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(theme.errorText)
+                let toast = data.inlineToast ?? ToastData(
+                    kind: .failure,
+                    message: data.translatedText.isEmpty ? "翻译失败" : data.translatedText
+                )
+                ToastView(toast: toast, theme: theme)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.leading)
                 if let onRetry = data.onRetry {
-                    Button("重试", action: onRetry)
-                        .buttonStyle(.borderedProminent)
+                    HStack(spacing: 10) {
+                        if data.showLanguagePicker {
+                            Picker("", selection: $selectedSourceLanguage) {
+                                ForEach(LanguageOption.allCases) { option in
+                                    Text(option.displayName).tag(option)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .font(.footnote)
+                            .padding(.vertical, 4) 
+                            .onChange(of: selectedSourceLanguage) { _, newValue in
+                                data.onChangeSourceLanguage?(newValue)
+                            }
+                        }
+                        Button(action: onRetry) {
+                            Text("重试")
+                                .font(.footnote)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(hoverRetry ? theme.translateText.opacity(0.12) : theme.cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(theme.translateText.opacity(hoverRetry ? 0.5 : 0.35), lineWidth: 1)
+                        )
+                        .foregroundColor(theme.translateText)
+                        .animation(.easeInOut(duration: 0.12), value: hoverRetry)
+                        .onHover { hovering in
+                            hoverRetry = hovering
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -1261,6 +1347,11 @@ struct TranslationCardData {
     let showAnalyzeButton: Bool
     let isAnalyzing: Bool
     let toast: ToastData?
+    let inlineToast: ToastData?
+    let showLanguagePicker: Bool
+    let detectedLanguageDisplayName: String?
+    let selectedSourceLanguage: LanguageOption
+    let onChangeSourceLanguage: ((LanguageOption) -> Void)?
 }
 
 private struct VerificationResult {
@@ -1284,10 +1375,9 @@ struct ToastView: View {
     var body: some View {
         HStack {
             Image(systemName: toast.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .imageScale(.medium)
             Text(toast.message)
-                .font(.footnote)
         }
+        .font(.footnote)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
@@ -1295,6 +1385,14 @@ struct ToastView: View {
                 .fill((toast.kind == .success ? theme.translateText : theme.errorText).opacity(0.12))
         )
         .foregroundColor(toast.kind == .success ? theme.translateText : theme.errorText)
+    }
+}
+
+private struct ToastHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

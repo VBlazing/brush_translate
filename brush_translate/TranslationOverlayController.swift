@@ -50,7 +50,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: onToggleComponent,
             showAnalyzeButton: showAnalyzeButton,
             isAnalyzing: isAnalyzing,
-            toast: toast
+            toast: toast,
+            inlineToast: nil,
+            showLanguagePicker: false,
+            detectedLanguageDisplayName: nil,
+            selectedSourceLanguage: .auto,
+            onChangeSourceLanguage: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -73,7 +78,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
-            toast: nil
+            toast: nil,
+            inlineToast: nil,
+            showLanguagePicker: false,
+            detectedLanguageDisplayName: nil,
+            selectedSourceLanguage: .auto,
+            onChangeSourceLanguage: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
@@ -96,14 +106,29 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
-            toast: nil
+            toast: nil,
+            inlineToast: nil,
+            showLanguagePicker: false,
+            detectedLanguageDisplayName: nil,
+            selectedSourceLanguage: .auto,
+            onChangeSourceLanguage: nil
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil)), theme: theme)
     }
 
-    func showFailure(sourceText: String, message: String, theme: ThemeOption, retry: @escaping () -> Void) {
+    func showFailure(
+        sourceText: String,
+        message: String,
+        theme: ThemeOption,
+        showLanguagePicker: Bool = false,
+        detectedLanguageDisplayName: String? = nil,
+        selectedSourceLanguage: LanguageOption,
+        onChangeSourceLanguage: ((LanguageOption) -> Void)? = nil,
+        inlineToast: ToastData? = nil,
+        retry: @escaping () -> Void
+    ) {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: message,
@@ -119,7 +144,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
-            toast: nil
+            toast: nil,
+            inlineToast: inlineToast,
+            showLanguagePicker: showLanguagePicker,
+            detectedLanguageDisplayName: detectedLanguageDisplayName,
+            selectedSourceLanguage: selectedSourceLanguage,
+            onChangeSourceLanguage: onChangeSourceLanguage
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)

@@ -22,6 +22,7 @@ final class AppModel: ObservableObject {
     @Published var doubaoModel: String
     @Published var geminiModel: String
     @Published var hotKeyDefinition: HotKeyDefinition
+    @Published var isEditingHotKey: Bool = false
 
     private let translator = TranslationService()
     private let overlay = TranslationOverlayController()
@@ -33,6 +34,7 @@ final class AppModel: ObservableObject {
     private var selectedComponentIDs = Set<SentenceComponentID>()
     private var activeTranslationToken: UUID?
     private var activeAnalysisToken: UUID?
+    private var retrySourceLanguageOverride: LanguageOption?
 
     init() {
         let storedSource = UserDefaults.standard.string(forKey: UserDefaultsKeys.sourceLanguage) ?? LanguageOption.auto.code
@@ -144,7 +146,8 @@ final class AppModel: ObservableObject {
         }
 
         HotKeyManager.shared.register { [weak self] in
-            self?.triggerTranslationFromSelection()
+            guard let self, self.isEditingHotKey == false else { return }
+            self.triggerTranslationFromSelection()
         }
         HotKeyManager.shared.updateHotKey(
             keyCode: hotKeyDefinition.keyCode,
@@ -181,7 +184,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func translateAndShow(for selectedText: String) async {
+    private func translateAndShow(for selectedText: String, sourceOverride: LanguageOption? = nil) async {
         let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
             await MainActor.run {
@@ -192,6 +195,8 @@ final class AppModel: ObservableObject {
         }
 
         let token = UUID()
+        let sourceForTranslation = sourceOverride ?? sourceLanguage
+        retrySourceLanguageOverride = nil
         await MainActor.run {
             self.activeTranslationToken = token
             self.activeAnalysisToken = nil
@@ -205,7 +210,7 @@ final class AppModel: ObservableObject {
             let apiKey = apiKey(for: provider)
             let result = try await translator.translate(
                 text: trimmed,
-                from: sourceLanguage,
+                from: sourceForTranslation,
                 to: targetLanguage,
                 provider: provider,
                 model: modelName,
@@ -231,10 +236,33 @@ final class AppModel: ObservableObject {
             }
         } catch {
             let failureMessage: String
+            let inlineToast: ToastData?
+            let showLanguagePicker: Bool
+            let detectedLanguageName: String?
             if let translationError = error as? TranslationError {
-                failureMessage = translationError.localizedDescription
+                switch translationError {
+                case .languageMismatch(let detectedName):
+                    failureMessage = translationError.localizedDescription
+                    inlineToast = ToastData(kind: .failure, message: failureMessage)
+                    showLanguagePicker = true
+                    detectedLanguageName = detectedName
+                    retrySourceLanguageOverride = sourceForTranslation
+                case .serviceError:
+                    failureMessage = translationError.localizedDescription
+                    inlineToast = ToastData(kind: .failure, message: failureMessage)
+                    showLanguagePicker = false
+                    detectedLanguageName = nil
+                default:
+                    failureMessage = translationError.localizedDescription
+                    inlineToast = ToastData(kind: .failure, message: failureMessage)
+                    showLanguagePicker = false
+                    detectedLanguageName = nil
+                }
             } else {
                 failureMessage = "翻译失败"
+                inlineToast = ToastData(kind: .failure, message: failureMessage)
+                showLanguagePicker = false
+                detectedLanguageName = nil
             }
             await MainActor.run {
                 guard self.activeTranslationToken == token else { return }
@@ -243,10 +271,23 @@ final class AppModel: ObservableObject {
                     sourceText: trimmed,
                     message: failureMessage,
                     theme: self.theme,
+                    showLanguagePicker: showLanguagePicker,
+                    detectedLanguageDisplayName: detectedLanguageName,
+                    selectedSourceLanguage: self.retrySourceLanguageOverride ?? self.sourceLanguage,
+                    onChangeSourceLanguage: { [weak self] language in
+                        self?.retrySourceLanguageOverride = language
+                    },
+                    inlineToast: inlineToast,
                     retry: { [weak self] in
                         Task { [weak self] in
                             guard let self else { return }
-                            await self.translateAndShow(for: trimmed)
+                            let override = self.retrySourceLanguageOverride ?? self.sourceLanguage
+                            await MainActor.run {
+                                if self.sourceLanguage != override {
+                                    self.sourceLanguage = override
+                                }
+                            }
+                            await self.translateAndShow(for: trimmed, sourceOverride: override)
                         }
                     }
                 )

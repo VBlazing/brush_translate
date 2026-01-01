@@ -17,6 +17,9 @@ final class HotKeyManager {
     private var handler: (() -> Void)?
     private var registeredKeyCode: UInt32?
     private var registeredModifiers: UInt32?
+    private var desiredKeyCode: UInt32?
+    private var desiredModifiers: UInt32?
+    private var isEnabled: Bool = true
 
     private init() {}
 
@@ -27,8 +30,22 @@ final class HotKeyManager {
 
     func updateHotKey(keyCode: UInt32, modifiers: UInt32) {
         installHandlerIfNeeded()
+        desiredKeyCode = keyCode
+        desiredModifiers = modifiers
+        guard isEnabled else { return }
         guard registeredKeyCode != keyCode || registeredModifiers != modifiers else { return }
         registerHotKey(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard isEnabled != enabled else { return }
+        isEnabled = enabled
+        if isEnabled {
+            guard let desiredKeyCode, let desiredModifiers else { return }
+            registerHotKey(keyCode: desiredKeyCode, modifiers: desiredModifiers)
+        } else {
+            unregisterHotKey()
+        }
     }
 
     func unregister() {
@@ -42,6 +59,9 @@ final class HotKeyManager {
         eventHandler = nil
         registeredKeyCode = nil
         registeredModifiers = nil
+        desiredKeyCode = nil
+        desiredModifiers = nil
+        isEnabled = true
     }
 
     private func installHandlerIfNeeded() {
