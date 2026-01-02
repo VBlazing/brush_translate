@@ -545,6 +545,15 @@ enum ThemeOption: String, CaseIterable, Identifiable {
         }
     }
 
+    var tabAccent: Color {
+        switch self {
+        case .night:
+            return Color(red: 240/255, green: 240/255, blue: 242/255)
+        case .light:
+            return Color(red: 28/255, green: 28/255, blue: 30/255)
+        }
+    }
+
     var shadow: Color {
         switch self {
         case .night:

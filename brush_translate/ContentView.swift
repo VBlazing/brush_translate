@@ -8,6 +8,20 @@
 import AppKit
 import SwiftUI
 
+private enum SettingsTab: String, CaseIterable, Identifiable {
+    case general
+    case service
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: return "通用"
+        case .service: return "服务"
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var revealedProviders = Set<TranslationProvider>()
@@ -19,6 +33,7 @@ struct ContentView: View {
     @State private var pendingHotKey: HotKeyDefinition?
     @State private var keyCaptureMonitor = KeyCaptureMonitor()
     @State private var saveButtonFrame: CGRect = .zero
+    @State private var selectedTab: SettingsTab = .general
 
     private var theme: ThemeOption { model.theme }
     private var themeBinding: Binding<ThemeOption> {
@@ -38,12 +53,12 @@ struct ContentView: View {
             theme.background
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 14) {
-                    translationSection
-                    modelSection
-                    featureSection
-                    themeSection
+            VStack(spacing: 16) {
+                tabBar
+                if selectedTab == .general {
+                    generalTab
+                } else {
+                    serviceTab
                 }
             }
             .padding(24)
@@ -52,6 +67,11 @@ struct ContentView: View {
         .environment(\.colorScheme, theme == .night ? .dark : .light)
         .onDisappear {
             cancelShortcutEditing()
+        }
+        .onChange(of: selectedTab) { newTab in
+            if newTab != .general {
+                cancelShortcutEditing()
+            }
         }
         .coordinateSpace(name: "settingsRoot")
         .onPreferenceChange(SaveButtonFrameKey.self) { frame in
@@ -105,6 +125,44 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(theme.divider.opacity(0.4))
                 )
+            }
+        }
+    }
+
+    private var tabBar: some View {
+        Picker("设置分组", selection: $selectedTab) {
+            ForEach(SettingsTab.allCases) { tab in
+                Text(tab.title).tag(tab)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .tint(theme.tabAccent)
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(theme.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(theme.divider, lineWidth: 1)
+                )
+        )
+    }
+
+    private var generalTab: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                translationSection
+                featureSection
+                themeSection
+            }
+        }
+    }
+
+    private var serviceTab: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                modelSection
             }
         }
     }
