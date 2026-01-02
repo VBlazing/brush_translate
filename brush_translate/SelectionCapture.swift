@@ -35,7 +35,7 @@ enum SelectionCapture {
         guard AXUIElementCopyAttributeValue(focusedApp as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &element) == .success,
               let focusedElement = element else { return nil }
 
-        return focusedElement as! AXUIElement
+        return (focusedElement as! AXUIElement)
     }
 
     private static func selectedText(from element: AXUIElement) -> String? {
