@@ -53,7 +53,7 @@ struct ContentView: View {
         .onDisappear {
             cancelShortcutEditing()
         }
-        .onChange(of: model.settingsTab) { newTab in
+        .onChange(of: model.settingsTab) { _, newTab in
             if newTab != .general {
                 cancelShortcutEditing()
             }
