@@ -119,15 +119,25 @@ final class TranslationService {
                 apiKey: trimmedKey
             )
             case .doubao:
-                result = try await translateWithOpenAICompatible(
-                url: URL(string: "https://ark.cn-beijing.volces.com/api/v3/chat/completions")!,
-                provider: provider,
-                model: model,
-                text: normalized,
-                from: source,
-                to: target,
-                apiKey: trimmedKey
-            )
+                if model == doubaoSeedTranslationModel {
+                    result = try await translateWithDoubaoSeed(
+                        text: normalized,
+                        from: source,
+                        to: target,
+                        model: model,
+                        apiKey: trimmedKey
+                    )
+                } else {
+                    result = try await translateWithOpenAICompatible(
+                        url: URL(string: "https://ark.cn-beijing.volces.com/api/v3/chat/completions")!,
+                        provider: provider,
+                        model: model,
+                        text: normalized,
+                        from: source,
+                        to: target,
+                        apiKey: trimmedKey
+                    )
+                }
             case .gemini:
                 result = try await translateWithGemini(
                 text: normalized,
@@ -305,6 +315,81 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
             default:
                 throw TranslationError.invalidResponse
             }
+        } catch let error as TranslationError {
+            throw error
+        } catch {
+            throw TranslationError.networkError(error.localizedDescription)
+        }
+    }
+
+    private func translateWithDoubaoSeed(
+        text: String,
+        from source: LanguageOption,
+        to target: LanguageOption,
+        model: String,
+        apiKey: String
+    ) async throws -> TranslationResult {
+        let url = URL(string: "https://ark.cn-beijing.volces.com/api/v3/responses")!
+        let translationOptions: DoubaoSeedTranslationOptions?
+        if source == .auto {
+            translationOptions = DoubaoSeedTranslationOptions(
+                targetLanguage: doubaoSeedLanguageCode(for: target)
+            )
+        } else {
+            translationOptions = DoubaoSeedTranslationOptions(
+                sourceLanguage: doubaoSeedLanguageCode(for: source),
+                targetLanguage: doubaoSeedLanguageCode(for: target)
+            )
+        }
+        let requestBody = DoubaoSeedRequest(
+            model: model,
+            input: [
+                .init(
+                    role: "user",
+                    content: [
+                        .init(
+                            type: "input_text",
+                            text: text,
+                            translationOptions: translationOptions
+                        )
+                    ]
+                )
+            ]
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        request.timeoutInterval = 15
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                let message = String(data: data, encoding: .utf8) ?? "Unexpected response"
+                throw TranslationError.networkError("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(message)")
+            }
+            let decoded = try JSONDecoder().decode(DoubaoSeedResponse.self, from: data)
+            let rawText = decoded.output
+                .first?
+                .content
+                .first?
+                .text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !rawText.isEmpty else { throw TranslationError.invalidResponse }
+
+            let guessedLanguage = source == .auto ? detectedDisplayName(for: text, fallback: source.displayName) : source.displayName
+            let translation = TranslationResult(
+                originalText: text,
+                translatedText: rawText,
+                alternatives: [],
+                detectedSource: guessedLanguage,
+                target: target.displayName
+            )
+            let cacheKey = cacheKeyFor(text: text, source: source, target: target, provider: .doubao, model: model)
+            cache.setObject(TranslationResultBox(value: translation), forKey: cacheKey)
+            return translation
         } catch let error as TranslationError {
             throw error
         } catch {
@@ -526,6 +611,13 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
         return "未知语言"
     }
 
+    private func doubaoSeedLanguageCode(for option: LanguageOption) -> String {
+        if option == .simplifiedChinese {
+            return "zh"
+        }
+        return option.code
+    }
+
     private func cacheKeyFor(text: String, source: LanguageOption, target: LanguageOption, provider: TranslationProvider, model: String) -> NSString {
         "\(provider.rawValue)|\(model)|\(source.code)|\(target.code)|\(text)" as NSString
     }
@@ -555,6 +647,8 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
         return []
     }
 }
+
+private let doubaoSeedTranslationModel = "doubao-seed-translation-250915"
 
 private let translationSchema = """
 {
@@ -588,6 +682,56 @@ private struct ChatCompletionsRequest: Encodable {
         case temperature
         case responseFormat = "response_format"
     }
+}
+
+private struct DoubaoSeedRequest: Encodable {
+    struct InputMessage: Encodable {
+        struct ContentItem: Encodable {
+            let type: String
+            let text: String
+            let translationOptions: DoubaoSeedTranslationOptions?
+
+            enum CodingKeys: String, CodingKey {
+                case type
+                case text
+                case translationOptions = "translation_options"
+            }
+        }
+
+        let role: String
+        let content: [ContentItem]
+    }
+
+    let model: String
+    let input: [InputMessage]
+}
+
+private struct DoubaoSeedTranslationOptions: Encodable {
+    let sourceLanguage: String?
+    let targetLanguage: String
+
+    init(sourceLanguage: String? = nil, targetLanguage: String) {
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case sourceLanguage = "source_language"
+        case targetLanguage = "target_language"
+    }
+}
+
+private struct DoubaoSeedResponse: Decodable {
+    struct OutputItem: Decodable {
+        struct ContentItem: Decodable {
+            let type: String?
+            let text: String?
+        }
+
+        let content: [ContentItem]
+    }
+
+    let output: [OutputItem]
 }
 
 private struct ChatCompletionsResponse: Decodable {
