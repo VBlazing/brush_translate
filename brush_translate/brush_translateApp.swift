@@ -18,11 +18,33 @@ struct brush_translateApp: App {
 
     var body: some Scene {
         MenuBarExtra("Brush Translate", systemImage: "character.book.closed") {
-            Button("打开设置") {
-                model.openSettings()
+            Picker("原文语言", selection: $model.sourceLanguage) {
+                ForEach(LanguageOption.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+
+            Picker("译文语言", selection: $model.targetLanguage) {
+                ForEach(LanguageOption.allCases.filter { $0 != .auto }) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+
+            Picker("主题", selection: $model.theme) {
+                ForEach(ThemeOption.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+
+            Divider()
+            Button("选择服务") {
+                model.openSettings(tab: .service)
+            }
+            Button("设置") {
+                model.openSettings(tab: .general)
             }
             Divider()
-            Button("退出应用") {
+            Button("退出") {
                 NSApp.terminate(nil)
             }
         }

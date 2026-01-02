@@ -9,11 +9,26 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general
+    case service
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: return "通用"
+        case .service: return "服务"
+        }
+    }
+}
+
 final class AppModel: ObservableObject {
     @Published var sourceLanguage: LanguageOption
     @Published var targetLanguage: LanguageOption
     @Published var statusMessage: String = "等待选中文本..."
     @Published var theme: ThemeOption
+    @Published var settingsTab: SettingsTab = .general
     @Published var deepseekAPIKey: String
     @Published var doubaoAPIKey: String
     @Published var geminiAPIKey: String
@@ -155,7 +170,8 @@ final class AppModel: ObservableObject {
         )
     }
 
-    func openSettings() {
+    func openSettings(tab: SettingsTab = .general) {
+        settingsTab = tab
         SettingsWindowController.shared.show(with: self)
     }
 

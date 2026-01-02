@@ -8,20 +8,6 @@
 import AppKit
 import SwiftUI
 
-private enum SettingsTab: String, CaseIterable, Identifiable {
-    case general
-    case service
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .general: return "通用"
-        case .service: return "服务"
-        }
-    }
-}
-
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var revealedProviders = Set<TranslationProvider>()
@@ -33,7 +19,6 @@ struct ContentView: View {
     @State private var pendingHotKey: HotKeyDefinition?
     @State private var keyCaptureMonitor = KeyCaptureMonitor()
     @State private var saveButtonFrame: CGRect = .zero
-    @State private var selectedTab: SettingsTab = .general
 
     private var theme: ThemeOption { model.theme }
     private var themeBinding: Binding<ThemeOption> {
@@ -55,7 +40,7 @@ struct ContentView: View {
 
             VStack(spacing: 16) {
                 tabBar
-                if selectedTab == .general {
+                if model.settingsTab == .general {
                     generalTab
                 } else {
                     serviceTab
@@ -68,7 +53,7 @@ struct ContentView: View {
         .onDisappear {
             cancelShortcutEditing()
         }
-        .onChange(of: selectedTab) { newTab in
+        .onChange(of: model.settingsTab) { newTab in
             if newTab != .general {
                 cancelShortcutEditing()
             }
@@ -130,7 +115,7 @@ struct ContentView: View {
     }
 
     private var tabBar: some View {
-        Picker("设置分组", selection: $selectedTab) {
+        Picker("设置分组", selection: $model.settingsTab) {
             ForEach(SettingsTab.allCases) { tab in
                 Text(tab.title).tag(tab)
             }
