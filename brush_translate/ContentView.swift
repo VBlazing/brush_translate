@@ -11,6 +11,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var revealedProviders = Set<TranslationProvider>()
+    @State private var revealedSecretProviders = Set<TranslationProvider>()
     @State private var expandedProviders = Set<TranslationProvider>()
     @State private var hoveredProvider: TranslationProvider?
     @State private var verifyingProviders = Set<TranslationProvider>()
@@ -217,7 +218,8 @@ struct ContentView: View {
         let isHovered = hoveredProvider == provider
         let showActions = isExpanded || isHovered
         let isSelected = model.selectedProvider == provider
-        let apiKeyMissing = trimmedAPIKey(for: provider).isEmpty
+        let credentialMessage = missingCredentialMessage(for: provider)
+        let credentialsMissing = credentialMessage != nil
         let hoverOpacity: CGFloat = theme == .night ? 0.35 : 0.32
         let hoverBackground = theme == .night
             ? theme.divider.opacity(hoverOpacity)
@@ -248,8 +250,8 @@ struct ContentView: View {
                 Spacer()
 
                 HStack(spacing: 10) {
-                    if apiKeyMissing {
-                        Text("未填写 API Key")
+                    if let credentialMessage {
+                        Text(credentialMessage)
                             .font(.footnote)
                             .foregroundColor(theme.errorText)
                     }
@@ -258,7 +260,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(theme.sourceText)
-                    .disabled(apiKeyMissing)
+                    .disabled(credentialsMissing)
                 }
                 .opacity(actionOpacity)
                 .allowsHitTesting(showActions)
@@ -291,16 +293,16 @@ struct ContentView: View {
                         .formFieldBackground(theme)
                     }
 
-                    SettingField(theme: theme, title: "API Key", caption: nil) {
+                    SettingField(theme: theme, title: provider == .youdao ? "App Key" : "API Key", caption: nil) {
                         ZStack(alignment: .trailing) {
                             let eyeButtonInset: CGFloat = 8
                             let eyeButtonWidth: CGFloat = 16
                             Group {
                                 if isAPIKeyRevealed(for: provider) {
-                                    TextField("在此粘贴你的 API Key", text: apiKeyBinding(for: provider))
+                                    TextField(provider == .youdao ? "在此粘贴你的 App Key" : "在此粘贴你的 API Key", text: apiKeyBinding(for: provider))
                                         .textFieldStyle(.plain)
                                 } else {
-                                    SecureField("在此粘贴你的 API Key", text: apiKeyBinding(for: provider))
+                                    SecureField(provider == .youdao ? "在此粘贴你的 App Key" : "在此粘贴你的 API Key", text: apiKeyBinding(for: provider))
                                         .textFieldStyle(.plain)
                                 }
                             }
@@ -317,6 +319,36 @@ struct ContentView: View {
                         }
                         .frame(width: fieldWidth)
                         .formFieldBackground(theme)
+                    }
+
+                    if provider == .youdao {
+                        SettingField(theme: theme, title: "App Secret", caption: nil) {
+                            ZStack(alignment: .trailing) {
+                                let eyeButtonInset: CGFloat = 8
+                                let eyeButtonWidth: CGFloat = 16
+                                Group {
+                                    if isAppSecretRevealed(for: provider) {
+                                        TextField("在此粘贴你的 App Secret", text: appSecretBinding(for: provider))
+                                            .textFieldStyle(.plain)
+                                    } else {
+                                        SecureField("在此粘贴你的 App Secret", text: appSecretBinding(for: provider))
+                                            .textFieldStyle(.plain)
+                                    }
+                                }
+                                .foregroundColor(theme.sourceText)
+                                .padding(.vertical, 2)
+                                .padding(.trailing, eyeButtonWidth + eyeButtonInset * 2)
+
+                                Button(action: { toggleAppSecretReveal(for: provider) }) {
+                                    Image(systemName: isAppSecretRevealed(for: provider) ? "eye.slash" : "eye")
+                                        .foregroundColor(theme.translateText)
+                                }
+                                .buttonStyle(.plain)
+                                .help(isAppSecretRevealed(for: provider) ? "隐藏密钥" : "显示密钥")
+                            }
+                            .frame(width: fieldWidth)
+                            .formFieldBackground(theme)
+                        }
                     }
 
                     let isVerifying = verifyingProviders.contains(provider)
@@ -339,7 +371,7 @@ struct ContentView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(theme.sourceText)
-                            .disabled(isVerifying)
+                            .disabled(isVerifying || credentialsMissing)
                         }
                     }
                     .padding(.top, 10)
@@ -400,6 +432,8 @@ struct ContentView: View {
             return $model.doubaoModel
         case .gemini:
             return $model.geminiModel
+        case .youdao:
+            return $model.youdaoModel
         }
     }
 
@@ -411,6 +445,17 @@ struct ContentView: View {
             return $model.doubaoAPIKey
         case .gemini:
             return $model.geminiAPIKey
+        case .youdao:
+            return $model.youdaoAppKey
+        }
+    }
+
+    private func appSecretBinding(for provider: TranslationProvider) -> Binding<String> {
+        switch provider {
+        case .youdao:
+            return $model.youdaoAppSecret
+        case .deepseek, .doubao, .gemini:
+            return .constant("")
         }
     }
 
@@ -426,6 +471,18 @@ struct ContentView: View {
         }
     }
 
+    private func isAppSecretRevealed(for provider: TranslationProvider) -> Bool {
+        revealedSecretProviders.contains(provider)
+    }
+
+    private func toggleAppSecretReveal(for provider: TranslationProvider) {
+        if revealedSecretProviders.contains(provider) {
+            revealedSecretProviders.remove(provider)
+        } else {
+            revealedSecretProviders.insert(provider)
+        }
+    }
+
     private func normalizeModelSelection(for provider: TranslationProvider) {
         let selection = modelSelectionBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolved = provider.models.contains(selection) ? selection : provider.defaultModel
@@ -434,8 +491,25 @@ struct ContentView: View {
         }
     }
 
-    private func trimmedAPIKey(for provider: TranslationProvider) -> String {
-        apiKeyBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func missingCredentialMessage(for provider: TranslationProvider) -> String? {
+        let trimmedKey = apiKeyBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if provider == .youdao {
+            let trimmedSecret = appSecretBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedKey.isEmpty && trimmedSecret.isEmpty {
+                return "未填写 App Key/Secret"
+            }
+            if trimmedKey.isEmpty {
+                return "未填写 App Key"
+            }
+            if trimmedSecret.isEmpty {
+                return "未填写 App Secret"
+            }
+            return nil
+        }
+        if trimmedKey.isEmpty {
+            return "未填写 API Key"
+        }
+        return nil
     }
 
     private var currentHotKeyKeys: [String] {
