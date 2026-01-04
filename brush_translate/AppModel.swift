@@ -32,10 +32,13 @@ final class AppModel: ObservableObject {
     @Published var deepseekAPIKey: String
     @Published var doubaoAPIKey: String
     @Published var geminiAPIKey: String
+    @Published var youdaoAppKey: String
+    @Published var youdaoAppSecret: String
     @Published var selectedProvider: TranslationProvider
     @Published var deepseekModel: String
     @Published var doubaoModel: String
     @Published var geminiModel: String
+    @Published var youdaoModel: String
     @Published var hotKeyDefinition: HotKeyDefinition
     @Published var isEditingHotKey: Bool = false
 
@@ -58,10 +61,13 @@ final class AppModel: ObservableObject {
         let storedAPIKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.deepseekAPIKey) ?? ""
         let storedDoubaoKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.doubaoAPIKey) ?? ""
         let storedGeminiKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.geminiAPIKey) ?? ""
+        let storedYoudaoAppKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.youdaoAppKey) ?? ""
+        let storedYoudaoAppSecret = UserDefaults.standard.string(forKey: UserDefaultsKeys.youdaoAppSecret) ?? ""
         let storedProvider = UserDefaults.standard.string(forKey: UserDefaultsKeys.selectedProvider) ?? TranslationProvider.deepseek.rawValue
         let storedDeepseekModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.deepseekModel) ?? TranslationProvider.deepseek.defaultModel
         let storedDoubaoModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.doubaoModel) ?? TranslationProvider.doubao.defaultModel
         let storedGeminiModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.geminiModel) ?? TranslationProvider.gemini.defaultModel
+        let storedYoudaoModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.youdaoModel) ?? TranslationProvider.youdao.defaultModel
         let storedHotKeyCode = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyCode) as? Int
         let storedHotKeyModifiers = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyModifiers) as? Int
 
@@ -71,10 +77,13 @@ final class AppModel: ObservableObject {
         deepseekAPIKey = storedAPIKey
         doubaoAPIKey = storedDoubaoKey
         geminiAPIKey = storedGeminiKey
+        youdaoAppKey = storedYoudaoAppKey
+        youdaoAppSecret = storedYoudaoAppSecret
         selectedProvider = TranslationProvider(rawValue: storedProvider) ?? .deepseek
         deepseekModel = TranslationProvider.deepseek.models.contains(storedDeepseekModel) ? storedDeepseekModel : TranslationProvider.deepseek.defaultModel
         doubaoModel = TranslationProvider.doubao.models.contains(storedDoubaoModel) ? storedDoubaoModel : TranslationProvider.doubao.defaultModel
         geminiModel = TranslationProvider.gemini.models.contains(storedGeminiModel) ? storedGeminiModel : TranslationProvider.gemini.defaultModel
+        youdaoModel = TranslationProvider.youdao.models.contains(storedYoudaoModel) ? storedYoudaoModel : TranslationProvider.youdao.defaultModel
         if let storedHotKeyCode, let storedHotKeyModifiers {
             hotKeyDefinition = HotKeyDefinition(
                 keyCode: UInt32(storedHotKeyCode),
@@ -120,6 +129,18 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $youdaoAppKey
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.youdaoAppKey)
+            }
+            .store(in: &cancellables)
+
+        $youdaoAppSecret
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.youdaoAppSecret)
+            }
+            .store(in: &cancellables)
+
         $selectedProvider
             .sink { value in
                 UserDefaults.standard.setValue(value.rawValue, forKey: UserDefaultsKeys.selectedProvider)
@@ -141,6 +162,12 @@ final class AppModel: ObservableObject {
         $geminiModel
             .sink { value in
                 UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.geminiModel)
+            }
+            .store(in: &cancellables)
+
+        $youdaoModel
+            .sink { value in
+                UserDefaults.standard.setValue(value, forKey: UserDefaultsKeys.youdaoModel)
             }
             .store(in: &cancellables)
 
@@ -224,13 +251,15 @@ final class AppModel: ObservableObject {
             let provider = selectedProvider
             let modelName = resolvedModelSelection(for: provider)
             let apiKey = apiKey(for: provider)
+            let apiSecret = apiSecret(for: provider)
             let result = try await translator.translate(
                 text: trimmed,
                 from: sourceForTranslation,
                 to: targetLanguage,
                 provider: provider,
                 model: modelName,
-                apiKey: apiKey
+                apiKey: apiKey,
+                apiSecret: apiSecret
             )
 
             await MainActor.run {
@@ -408,8 +437,9 @@ final class AppModel: ObservableObject {
     func validateProvider(_ provider: TranslationProvider) async -> Result<Void, TranslationError> {
         let modelName = resolvedModelSelection(for: provider)
         let apiKey = apiKey(for: provider)
+        let apiSecret = apiSecret(for: provider)
         do {
-            try await translator.validate(provider: provider, model: modelName, apiKey: apiKey)
+            try await translator.validate(provider: provider, model: modelName, apiKey: apiKey, apiSecret: apiSecret)
             return .success(())
         } catch let error as TranslationError {
             return .failure(error)
@@ -426,6 +456,17 @@ final class AppModel: ObservableObject {
             return doubaoAPIKey
         case .gemini:
             return geminiAPIKey
+        case .youdao:
+            return youdaoAppKey
+        }
+    }
+
+    private func apiSecret(for provider: TranslationProvider) -> String {
+        switch provider {
+        case .youdao:
+            return youdaoAppSecret
+        case .deepseek, .doubao, .gemini:
+            return ""
         }
     }
 
@@ -437,6 +478,8 @@ final class AppModel: ObservableObject {
             return doubaoModel
         case .gemini:
             return geminiModel
+        case .youdao:
+            return youdaoModel
         }
     }
 
@@ -456,10 +499,13 @@ enum UserDefaultsKeys {
     static let deepseekAPIKey = "brush_translate.deepseek.apiKey"
     static let doubaoAPIKey = "brush_translate.doubao.apiKey"
     static let geminiAPIKey = "brush_translate.gemini.apiKey"
+    static let youdaoAppKey = "brush_translate.youdao.appKey"
+    static let youdaoAppSecret = "brush_translate.youdao.appSecret"
     static let selectedProvider = "brush_translate.provider"
     static let deepseekModel = "brush_translate.deepseek.model"
     static let doubaoModel = "brush_translate.doubao.model"
     static let geminiModel = "brush_translate.gemini.model"
+    static let youdaoModel = "brush_translate.youdao.model"
     static let hotKeyCode = "brush_translate.hotkey.code"
     static let hotKeyModifiers = "brush_translate.hotkey.modifiers"
 }

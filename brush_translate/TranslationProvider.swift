@@ -11,6 +11,7 @@ enum TranslationProvider: String, CaseIterable, Identifiable {
     case deepseek
     case doubao
     case gemini
+    case youdao
 
     var id: String { rawValue }
 
@@ -22,6 +23,8 @@ enum TranslationProvider: String, CaseIterable, Identifiable {
             return "豆包"
         case .gemini:
             return "Gemini"
+        case .youdao:
+            return "有道"
         }
     }
 
@@ -33,6 +36,8 @@ enum TranslationProvider: String, CaseIterable, Identifiable {
             return "leaf.circle.fill"
         case .gemini:
             return "sparkles"
+        case .youdao:
+            return "globe.asia.australia.fill"
         }
     }
 
@@ -49,6 +54,8 @@ enum TranslationProvider: String, CaseIterable, Identifiable {
             ]
         case .gemini:
             return ["gemini-2.5-pro"]
+        case .youdao:
+            return ["youdao-text-translation"]
         }
     }
 

@@ -79,13 +79,22 @@ final class TranslationService {
         provider: TranslationProvider,
         model: String,
         apiKey: String?,
+        apiSecret: String? = nil,
         useCache: Bool = true
     ) async throws -> TranslationResult {
         let startTime = CFAbsoluteTimeGetCurrent()
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw TranslationError.failedToTranslate }
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey(provider: provider) }
+        let trimmedSecret = apiSecret?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch provider {
+        case .youdao:
+            guard trimmedKey.isEmpty == false, trimmedSecret.isEmpty == false else {
+                throw TranslationError.missingAPIKey(provider: provider)
+            }
+        case .deepseek, .doubao, .gemini:
+            guard trimmedKey.isEmpty == false else { throw TranslationError.missingAPIKey(provider: provider) }
+        }
         if source != .auto, languageMatchesExpected(text: normalized, expected: source) == false {
             let detectedName = detectedDisplayName(for: normalized, fallback: "未知语言")
             throw TranslationError.languageMismatch(detectedName)
@@ -146,6 +155,15 @@ final class TranslationService {
                 model: model,
                 apiKey: trimmedKey
             )
+            case .youdao:
+                result = try await translateWithYoudao(
+                    text: normalized,
+                    from: source,
+                    to: target,
+                    model: model,
+                    appKey: trimmedKey,
+                    appSecret: trimmedSecret
+                )
             }
             logTranslationDuration(
                 startTime: startTime,
@@ -165,7 +183,7 @@ final class TranslationService {
         }
     }
 
-    func validate(provider: TranslationProvider, model: String, apiKey: String?) async throws {
+    func validate(provider: TranslationProvider, model: String, apiKey: String?, apiSecret: String? = nil) async throws {
         _ = try await translate(
             text: "Hello",
             from: .auto,
@@ -173,6 +191,7 @@ final class TranslationService {
             provider: provider,
             model: model,
             apiKey: apiKey,
+            apiSecret: apiSecret,
             useCache: false
         )
     }
@@ -388,6 +407,79 @@ Rules: translate input after "Translate:" from \(promptSource) to \(target.displ
                 target: target.displayName
             )
             let cacheKey = cacheKeyFor(text: text, source: source, target: target, provider: .doubao, model: model)
+            cache.setObject(TranslationResultBox(value: translation), forKey: cacheKey)
+            return translation
+        } catch let error as TranslationError {
+            throw error
+        } catch {
+            throw TranslationError.networkError(error.localizedDescription)
+        }
+    }
+
+    private func translateWithYoudao(
+        text: String,
+        from source: LanguageOption,
+        to target: LanguageOption,
+        model: String,
+        appKey: String,
+        appSecret: String
+    ) async throws -> TranslationResult {
+        let url = URL(string: "https://openapi.youdao.com/api")!
+        let salt = UUID().uuidString
+        let curtime = String(Int(Date().timeIntervalSince1970))
+        let input = YoudaoHelpers.signInput(for: text)
+        let sign = YoudaoHelpers.sha256Hex("\(appKey)\(input)\(salt)\(curtime)\(appSecret)")
+        let parameters: [String: String] = [
+            "q": text,
+            "from": YoudaoHelpers.languageCode(for: source),
+            "to": YoudaoHelpers.languageCode(for: target),
+            "appKey": appKey,
+            "salt": salt,
+            "sign": sign,
+            "signType": "v3",
+            "curtime": curtime,
+            "strict": source == .auto ? "false" : "true"
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = YoudaoHelpers.formURLEncoded(parameters)
+        request.timeoutInterval = 15
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                let message = String(data: data, encoding: .utf8) ?? "Unexpected response"
+                throw TranslationError.networkError("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(message)")
+            }
+
+            let decoded = try JSONDecoder().decode(YoudaoResponse.self, from: data)
+            guard decoded.errorCode == "0" else {
+                let detail = YoudaoHelpers.errorMessage(for: decoded.errorCode)
+                let message = detail == nil
+                    ? "有道错误码: \(decoded.errorCode)"
+                    : "有道错误码: \(decoded.errorCode)（\(detail!)）"
+                throw TranslationError.serviceError(message)
+            }
+            let translated = decoded.translation?.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !translated.isEmpty else { throw TranslationError.invalidResponse }
+            let guessedLanguage: String
+            if source == .auto, let pair = decoded.l, let fromCode = pair.split(separator: "2").first {
+                guessedLanguage = YoudaoHelpers.displayName(for: String(fromCode))
+            } else {
+                guessedLanguage = source == .auto
+                    ? detectedDisplayName(for: text, fallback: source.displayName)
+                    : source.displayName
+            }
+            let translation = TranslationResult(
+                originalText: text,
+                translatedText: translated,
+                alternatives: [],
+                detectedSource: guessedLanguage,
+                target: target.displayName
+            )
+            let cacheKey = cacheKeyFor(text: text, source: source, target: target, provider: .youdao, model: model)
             cache.setObject(TranslationResultBox(value: translation), forKey: cacheKey)
             return translation
         } catch let error as TranslationError {
@@ -734,6 +826,12 @@ private struct DoubaoSeedResponse: Decodable {
     let output: [OutputItem]
 }
 
+private struct YoudaoResponse: Decodable {
+    let errorCode: String
+    let translation: [String]?
+    let l: String?
+}
+
 private struct ChatCompletionsResponse: Decodable {
     struct Choice: Decodable {
         struct Message: Decodable {
@@ -875,6 +973,9 @@ extension TranslationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey(let provider):
+            if provider == .youdao {
+                return "未配置 有道 App Key/Secret"
+            }
             return "未配置 \(provider.displayName) API Key"
         case .failedToTranslate:
             return "没有可翻译的内容"
