@@ -39,6 +39,7 @@ final class AppModel: ObservableObject {
     @Published var doubaoModel: String
     @Published var geminiModel: String
     @Published var youdaoModel: String
+    @Published var cardBackgroundOpacity: Double
     @Published var hotKeyDefinition: HotKeyDefinition
     @Published var isEditingHotKey: Bool = false
 
@@ -68,6 +69,7 @@ final class AppModel: ObservableObject {
         let storedDoubaoModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.doubaoModel) ?? TranslationProvider.doubao.defaultModel
         let storedGeminiModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.geminiModel) ?? TranslationProvider.gemini.defaultModel
         let storedYoudaoModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.youdaoModel) ?? TranslationProvider.youdao.defaultModel
+        let storedCardOpacity = UserDefaults.standard.double(forKey: UserDefaultsKeys.cardBackgroundOpacity)
         let storedHotKeyCode = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyCode) as? Int
         let storedHotKeyModifiers = UserDefaults.standard.object(forKey: UserDefaultsKeys.hotKeyModifiers) as? Int
 
@@ -84,6 +86,11 @@ final class AppModel: ObservableObject {
         doubaoModel = TranslationProvider.doubao.models.contains(storedDoubaoModel) ? storedDoubaoModel : TranslationProvider.doubao.defaultModel
         geminiModel = TranslationProvider.gemini.models.contains(storedGeminiModel) ? storedGeminiModel : TranslationProvider.gemini.defaultModel
         youdaoModel = TranslationProvider.youdao.models.contains(storedYoudaoModel) ? storedYoudaoModel : TranslationProvider.youdao.defaultModel
+        if storedCardOpacity == 0 {
+            cardBackgroundOpacity = 1.0
+        } else {
+            cardBackgroundOpacity = min(max(storedCardOpacity, 0.3), 1.0)
+        }
         if let storedHotKeyCode, let storedHotKeyModifiers {
             hotKeyDefinition = HotKeyDefinition(
                 keyCode: UInt32(storedHotKeyCode),
@@ -171,6 +178,13 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $cardBackgroundOpacity
+            .sink { value in
+                let clampedValue = min(max(value, 0.3), 1.0)
+                UserDefaults.standard.setValue(clampedValue, forKey: UserDefaultsKeys.cardBackgroundOpacity)
+            }
+            .store(in: &cancellables)
+
         $hotKeyDefinition
             .sink { value in
                 UserDefaults.standard.setValue(Int(value.keyCode), forKey: UserDefaultsKeys.hotKeyCode)
@@ -215,7 +229,7 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     if SelectionCapture.isAccessibilityTrusted() {
                         self.statusMessage = "未获取到选中文本"
-                        self.overlay.showPlaceholder(theme: self.theme)
+                        self.overlay.showPlaceholder(theme: self.theme, cardBackgroundOpacity: self.cardBackgroundOpacity)
                     } else {
                         self.statusMessage = "请在“隐私与安全性 > 辅助功能”允许本应用"
                     }
@@ -232,7 +246,7 @@ final class AppModel: ObservableObject {
         guard trimmed.isEmpty == false else {
             await MainActor.run {
                 self.statusMessage = "未获取到选中文本"
-                self.overlay.showPlaceholder(theme: self.theme)
+                self.overlay.showPlaceholder(theme: self.theme, cardBackgroundOpacity: self.cardBackgroundOpacity)
             }
             return
         }
@@ -244,7 +258,7 @@ final class AppModel: ObservableObject {
             self.activeTranslationToken = token
             self.activeAnalysisToken = nil
             self.statusMessage = "正在翻译..."
-            self.overlay.showLoading(sourceText: trimmed, theme: self.theme)
+            self.overlay.showLoading(sourceText: trimmed, theme: self.theme, cardBackgroundOpacity: self.cardBackgroundOpacity)
         }
 
         do {
@@ -273,6 +287,7 @@ final class AppModel: ObservableObject {
                 self.overlay.showSuccess(
                     translation: result,
                     theme: self.theme,
+                    cardBackgroundOpacity: self.cardBackgroundOpacity,
                     onAnalyze: { [weak self] in
                         self?.startAnalyze()
                     },
@@ -316,6 +331,7 @@ final class AppModel: ObservableObject {
                     sourceText: trimmed,
                     message: failureMessage,
                     theme: self.theme,
+                    cardBackgroundOpacity: self.cardBackgroundOpacity,
                     showLanguagePicker: showLanguagePicker,
                     detectedLanguageDisplayName: detectedLanguageName,
                     selectedSourceLanguage: self.retrySourceLanguageOverride ?? self.sourceLanguage,
@@ -407,6 +423,7 @@ final class AppModel: ObservableObject {
             wordParts: lastWordParts,
             selectedComponentIDs: selectedComponentIDs,
             theme: theme,
+            cardBackgroundOpacity: cardBackgroundOpacity,
             isAnalyzing: isAnalyzing,
             toast: toast,
             onAnalyze: { [weak self] in
@@ -506,6 +523,7 @@ enum UserDefaultsKeys {
     static let doubaoModel = "brush_translate.doubao.model"
     static let geminiModel = "brush_translate.gemini.model"
     static let youdaoModel = "brush_translate.youdao.model"
+    static let cardBackgroundOpacity = "brush_translate.cardBackgroundOpacity"
     static let hotKeyCode = "brush_translate.hotkey.code"
     static let hotKeyModifiers = "brush_translate.hotkey.modifiers"
 }

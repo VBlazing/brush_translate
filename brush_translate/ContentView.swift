@@ -33,6 +33,16 @@ struct ContentView: View {
             }
         )
     }
+    private var cardOpacityBinding: Binding<Double> {
+        Binding(
+            get: { model.cardBackgroundOpacity },
+            set: { newValue in
+                let step = 0.05
+                let snappedValue = (newValue / step).rounded() * step
+                model.cardBackgroundOpacity = min(max(snappedValue, 0.3), 1.0)
+            }
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -208,6 +218,16 @@ struct ContentView: View {
                 .labelsHidden()
                 .pickerStyle(.segmented)
                 .formFieldBackground(theme)
+            }
+
+            SettingField(theme: theme, title: "卡片透明度", caption: "仅影响翻译卡片背景") {
+                HStack(spacing: 10) {
+                    Slider(value: cardOpacityBinding, in: 0.3...1.0)
+                        .frame(width: 180)
+                    Text("\(Int((model.cardBackgroundOpacity * 100).rounded()))%")
+                        .foregroundColor(theme.translateText)
+                        .frame(width: 44, alignment: .trailing)
+                }
             }
         }
     }
@@ -983,6 +1003,7 @@ private extension ThemeOption {
 struct TranslationCardView: View {
     let data: TranslationCardData
     let theme: ThemeOption
+    let cardBackgroundOpacity: Double
     let onHoverChange: (Bool) -> Void
     let onSpeak: (() -> Void)?
     let onSaveNote: (() -> Void)?
@@ -1001,6 +1022,7 @@ struct TranslationCardView: View {
     init(
         data: TranslationCardData,
         theme: ThemeOption,
+        cardBackgroundOpacity: Double,
         onHoverChange: @escaping (Bool) -> Void,
         onSpeak: (() -> Void)?,
         onSaveNote: (() -> Void)?,
@@ -1008,6 +1030,7 @@ struct TranslationCardView: View {
     ) {
         self.data = data
         self.theme = theme
+        self.cardBackgroundOpacity = cardBackgroundOpacity
         self.onHoverChange = onHoverChange
         self.onSpeak = onSpeak
         self.onSaveNote = onSaveNote
@@ -1038,7 +1061,7 @@ struct TranslationCardView: View {
             .padding(.bottom, data.toast == nil ? 0 : toastHeight)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(theme.cardBackground)
+                    .fill(theme.cardBackground.opacity(cardBackgroundOpacity))
                     .shadow(color: theme.shadow, radius: 28, y: 12)
             )
             .frame(width: 520)

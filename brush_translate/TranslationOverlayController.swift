@@ -29,6 +29,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         wordParts: [WordPart] = [],
         selectedComponentIDs: Set<SentenceComponentID>? = nil,
         theme: ThemeOption,
+        cardBackgroundOpacity: Double,
         isAnalyzing: Bool = false,
         toast: ToastData? = nil,
         onAnalyze: (() -> Void)? = nil,
@@ -57,12 +58,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             selectedSourceLanguage: .auto,
             onChangeSourceLanguage: nil
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote, onAnalyze: data.onAnalyze)), theme: theme)
     }
 
-    func showPlaceholder(theme: ThemeOption) {
+    func showPlaceholder(theme: ThemeOption, cardBackgroundOpacity: Double) {
         let data = TranslationCardData(
             sourceText: "",
             translatedText: "",
@@ -85,12 +86,12 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             selectedSourceLanguage: .auto,
             onChangeSourceLanguage: nil
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil)), theme: theme)
     }
 
-    func showLoading(sourceText: String, theme: ThemeOption) {
+    func showLoading(sourceText: String, theme: ThemeOption, cardBackgroundOpacity: Double) {
         let data = TranslationCardData(
             sourceText: sourceText,
             translatedText: "",
@@ -113,7 +114,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             selectedSourceLanguage: .auto,
             onChangeSourceLanguage: nil
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil)), theme: theme)
     }
@@ -122,6 +123,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         sourceText: String,
         message: String,
         theme: ThemeOption,
+        cardBackgroundOpacity: Double,
         showLanguagePicker: Bool = false,
         detectedLanguageDisplayName: String? = nil,
         selectedSourceLanguage: LanguageOption,
@@ -151,7 +153,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             selectedSourceLanguage: selectedSourceLanguage,
             onChangeSourceLanguage: onChangeSourceLanguage
         )
-        show(view: AnyView(TranslationCardView(data: data, theme: theme, onHoverChange: { [weak self] hovering in
+        show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
         }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote, onAnalyze: data.onAnalyze)), theme: theme)
     }
