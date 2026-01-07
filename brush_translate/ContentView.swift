@@ -220,7 +220,7 @@ struct ContentView: View {
                 .formFieldBackground(theme)
             }
 
-            SettingField(theme: theme, title: "卡片透明度", caption: "仅影响翻译卡片背景") {
+            SettingField(theme: theme, title: "透明度", caption: nil) {
                 HStack(spacing: 10) {
                     Slider(value: cardOpacityBinding, in: 0.3...1.0)
                         .frame(width: 180)
