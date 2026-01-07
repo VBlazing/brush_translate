@@ -87,7 +87,7 @@ final class AppModel: ObservableObject {
         geminiModel = TranslationProvider.gemini.models.contains(storedGeminiModel) ? storedGeminiModel : TranslationProvider.gemini.defaultModel
         youdaoModel = TranslationProvider.youdao.models.contains(storedYoudaoModel) ? storedYoudaoModel : TranslationProvider.youdao.defaultModel
         if storedCardOpacity == 0 {
-            cardBackgroundOpacity = 1.0
+            cardBackgroundOpacity = 0.7
         } else {
             cardBackgroundOpacity = min(max(storedCardOpacity, 0.3), 1.0)
         }
