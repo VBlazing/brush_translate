@@ -26,9 +26,33 @@
 		C13D14592ED7392900C065AA /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C19389912F12163200067A07 /* Exceptions for "brush_translate" folder in "brush_translate" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"prompt/requirement/copy-text/copy-text_2026-01-10.md",
+			);
+			target = C13D14372ED7392900C0649D /* brush_translate */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		C19389922F12163200067A07 /* Exceptions for "brush_translate" folder in "Compile Sources" phase from "brush_translate" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = C13D14342ED7392900C0649D /* Sources */;
+			membershipExceptions = (
+				"prompt/requirement/copy-text/copy-text_2026-01-10.md",
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C13D143A2ED7392900C0649D /* brush_translate */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C19389912F12163200067A07 /* Exceptions for "brush_translate" folder in "brush_translate" target */,
+				C19389922F12163200067A07 /* Exceptions for "brush_translate" folder in "Compile Sources" phase from "brush_translate" target */,
+			);
 			path = brush_translate;
 			sourceTree = "<group>";
 		};

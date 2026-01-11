@@ -53,6 +53,8 @@ final class AppModel: ObservableObject {
     private var selectedComponentIDs = Set<SentenceComponentID>()
     private var activeTranslationToken: UUID?
     private var activeAnalysisToken: UUID?
+    private var activeCopyToastToken: UUID?
+    private var isAnalyzing: Bool = false
     private var retrySourceLanguageOverride: LanguageOption?
 
     init() {
@@ -257,6 +259,8 @@ final class AppModel: ObservableObject {
         await MainActor.run {
             self.activeTranslationToken = token
             self.activeAnalysisToken = nil
+            self.activeCopyToastToken = nil
+            self.isAnalyzing = false
             self.statusMessage = "正在翻译..."
             self.overlay.showLoading(sourceText: trimmed, theme: self.theme, cardBackgroundOpacity: self.cardBackgroundOpacity)
         }
@@ -290,6 +294,9 @@ final class AppModel: ObservableObject {
                     cardBackgroundOpacity: self.cardBackgroundOpacity,
                     onAnalyze: { [weak self] in
                         self?.startAnalyze()
+                    },
+                    onCopy: { [weak self] in
+                        self?.copyCurrentTranslation()
                     },
                     showAnalyzeButton: provider == .deepseek
                 )
@@ -326,6 +333,7 @@ final class AppModel: ObservableObject {
             }
             await MainActor.run {
                 guard self.activeTranslationToken == token else { return }
+                self.isAnalyzing = false
                 self.statusMessage = "翻译失败：\(failureMessage)"
                 self.overlay.showFailure(
                     sourceText: trimmed,
@@ -416,6 +424,7 @@ final class AppModel: ObservableObject {
 
     @MainActor
     private func presentOverlaySuccess(translation: TranslationResult, isAnalyzing: Bool, toast: ToastData? = nil) {
+        self.isAnalyzing = isAnalyzing
         overlay.showSuccess(
             translation: translation,
             analysis: lastAnalysis,
@@ -429,11 +438,40 @@ final class AppModel: ObservableObject {
             onAnalyze: { [weak self] in
                 self?.startAnalyze()
             },
+            onCopy: { [weak self] in
+                self?.copyCurrentTranslation()
+            },
             onToggleComponent: { [weak self] id in
                 self?.toggleComponent(id)
             },
             showAnalyzeButton: selectedProvider == .deepseek
         )
+    }
+
+    @MainActor
+    private func copyCurrentTranslation() {
+        guard let translation = lastTranslation else { return }
+        let composedText = "\(translation.originalText)\n\(translation.translatedText)"
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let success = pasteboard.setString(composedText, forType: .string)
+        let toast = ToastData(
+            kind: success ? .success : .failure,
+            message: success ? "复制成功" : "复制失败"
+        )
+        presentOverlaySuccess(translation: translation, isAnalyzing: isAnalyzing, toast: toast)
+        let token = UUID()
+        activeCopyToastToken = token
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await MainActor.run {
+                guard self.activeCopyToastToken == token else { return }
+                guard let current = self.lastTranslation,
+                      current.originalText == translation.originalText,
+                      current.translatedText == translation.translatedText else { return }
+                self.presentOverlaySuccess(translation: current, isAnalyzing: self.isAnalyzing)
+            }
+        }
     }
 
     private func toggleComponent(_ id: SentenceComponentID) {

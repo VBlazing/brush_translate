@@ -1008,10 +1008,12 @@ struct TranslationCardView: View {
     let onSpeak: (() -> Void)?
     let onSaveNote: (() -> Void)?
     let onAnalyze: (() -> Void)?
+    let onCopy: (() -> Void)?
 
     @State private var hoverSpeak = false
     @State private var hoverNote = false
     @State private var hoverAnalyze = false
+    @State private var hoverCopy = false
     @State private var toastHeight: CGFloat = 0
     @State private var selectedSourceLanguage: LanguageOption
     @State private var hoverRetry = false
@@ -1026,7 +1028,8 @@ struct TranslationCardView: View {
         onHoverChange: @escaping (Bool) -> Void,
         onSpeak: (() -> Void)?,
         onSaveNote: (() -> Void)?,
-        onAnalyze: (() -> Void)?
+        onAnalyze: (() -> Void)?,
+        onCopy: (() -> Void)?
     ) {
         self.data = data
         self.theme = theme
@@ -1035,6 +1038,7 @@ struct TranslationCardView: View {
         self.onSpeak = onSpeak
         self.onSaveNote = onSaveNote
         self.onAnalyze = onAnalyze
+        self.onCopy = onCopy
         _selectedSourceLanguage = State(initialValue: data.selectedSourceLanguage)
     }
 
@@ -1167,6 +1171,25 @@ struct TranslationCardView: View {
             .animation(.easeInOut(duration: 0.12), value: hoverSpeak)
             .onHover { hover in hoverSpeak = hover }
             .disabled(data.sourceText.isEmpty)
+
+            if data.status == .success, onCopy != nil {
+                Button(action: { onCopy?() }) {
+                    Image(systemName: "doc.on.doc")
+                        .imageScale(.medium)
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(theme.translateText.opacity(hoverCopy ? 0.12 : 0))
+                )
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
+                .foregroundColor(theme.translateText.opacity(data.sourceText.isEmpty ? 0.3 : 1))
+                .scaleEffect(hoverCopy ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 0.12), value: hoverCopy)
+                .onHover { hover in hoverCopy = hover }
+                .disabled(data.sourceText.isEmpty)
+            }
 
 //            Button(action: { onSaveNote?() }) {
 //                Image(systemName: "note.text")
@@ -1483,6 +1506,7 @@ struct TranslationCardData {
     let onSpeak: (() -> Void)?
     let onSaveNote: (() -> Void)?
     let onAnalyze: (() -> Void)?
+    let onCopy: (() -> Void)?
     let onToggleComponent: ((SentenceComponentID) -> Void)?
     let showAnalyzeButton: Bool
     let isAnalyzing: Bool

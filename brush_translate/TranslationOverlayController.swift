@@ -33,6 +33,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         isAnalyzing: Bool = false,
         toast: ToastData? = nil,
         onAnalyze: (() -> Void)? = nil,
+        onCopy: (() -> Void)? = nil,
         onToggleComponent: ((SentenceComponentID) -> Void)? = nil,
         showAnalyzeButton: Bool = true
     ) {
@@ -48,6 +49,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSpeak: { [weak self] in self?.speak(text: translation.originalText) },
             onSaveNote: { [weak self] in self?.saveNote(source: translation.originalText, translated: translation.translatedText) },
             onAnalyze: onAnalyze,
+            onCopy: onCopy,
             onToggleComponent: onToggleComponent,
             showAnalyzeButton: showAnalyzeButton,
             isAnalyzing: isAnalyzing,
@@ -60,7 +62,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote, onAnalyze: data.onAnalyze)), theme: theme)
+        }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote, onAnalyze: data.onAnalyze, onCopy: data.onCopy)), theme: theme)
     }
 
     func showPlaceholder(theme: ThemeOption, cardBackgroundOpacity: Double) {
@@ -76,6 +78,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSpeak: nil,
             onSaveNote: nil,
             onAnalyze: nil,
+            onCopy: nil,
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
@@ -88,7 +91,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil)), theme: theme)
+        }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil, onCopy: nil)), theme: theme)
     }
 
     func showLoading(sourceText: String, theme: ThemeOption, cardBackgroundOpacity: Double) {
@@ -104,6 +107,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSpeak: nil,
             onSaveNote: nil,
             onAnalyze: nil,
+            onCopy: nil,
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
@@ -116,7 +120,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil)), theme: theme)
+        }, onSpeak: nil, onSaveNote: nil, onAnalyze: nil, onCopy: nil)), theme: theme)
     }
 
     func showFailure(
@@ -143,6 +147,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
             onSpeak: { [weak self] in self?.speak(text: sourceText) },
             onSaveNote: nil,
             onAnalyze: nil,
+            onCopy: nil,
             onToggleComponent: nil,
             showAnalyzeButton: false,
             isAnalyzing: false,
@@ -155,7 +160,7 @@ final class TranslationOverlayController: NSObject, NSWindowDelegate {
         )
         show(view: AnyView(TranslationCardView(data: data, theme: theme, cardBackgroundOpacity: cardBackgroundOpacity, onHoverChange: { [weak self] hovering in
             self?.handleHover(isHovering: hovering)
-        }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote, onAnalyze: data.onAnalyze)), theme: theme)
+        }, onSpeak: data.onSpeak, onSaveNote: data.onSaveNote, onAnalyze: data.onAnalyze, onCopy: data.onCopy)), theme: theme)
     }
 
     private func speak(text: String) {
