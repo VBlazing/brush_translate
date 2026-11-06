@@ -19,6 +19,7 @@
 - For clipboard/hotkey logic, prefer protocol abstractions so side effects can be mocked; avoid flakiness from real pasteboard or accessibility calls.
 
 ## Commit & Pull Request Guidelines
+- Work directly on `main` for this project. Do not create separate feature or test branches unless the user explicitly requests them.
 - Commits should be concise and present-tense, describing behavior change (e.g., "Handle empty pasteboard selection").
 - For PRs: include summary, before/after behavior, any UX/UI screenshots, and validation notes (manual steps or commands run). Link issues/tasks when applicable.
 
