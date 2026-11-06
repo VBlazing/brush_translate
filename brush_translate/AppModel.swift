@@ -23,6 +23,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 final class AppModel: ObservableObject {
     @Published var sourceLanguage: LanguageOption
     @Published var targetLanguage: LanguageOption
